@@ -1,0 +1,209 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Rol {
+  ADMINISTRADOR
+  EMPLEADO
+  CONSULTA
+}
+
+enum MovimientoTipo {
+  COMPRA
+  REMITO
+  CANCELACION_REMITO
+  ANULACION_COMPRA
+  AJUSTE_MANUAL
+  ALTA_PRODUCTO
+  CAMBIO_COSTO
+}
+
+enum CompraEstado {
+  ACTIVA
+  ANULADA
+}
+
+enum RemitoEstado {
+  ACTIVO
+  CANCELADO
+}
+
+enum ListaPrecios {
+  MAYORISTA
+  MINORISTA
+}
+
+model User {
+  id            String            @id @default(uuid()) @db.Uuid
+  nombre        String            @db.VarChar(100)
+  email         String            @unique @db.VarChar(150)
+  passwordHash  String            @map("password_hash")
+  rol           Rol
+  activo        Boolean           @default(true)
+  refreshTokens RefreshToken[]
+  compras       Compra[]
+  remitos       Remito[]
+  movimientos   MovimientoStock[]
+  createdAt     DateTime          @default(now()) @map("created_at")
+  updatedAt     DateTime          @updatedAt @map("updated_at")
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  tokenHash String   @unique @map("token_hash")
+  expiresAt DateTime @map("expires_at")
+  revoked   Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+model Categoria {
+  id        String     @id @default(uuid()) @db.Uuid
+  nombre    String     @unique @db.VarChar(80)
+  activo    Boolean    @default(true)
+  productos Producto[]
+  createdAt DateTime   @default(now()) @map("created_at")
+
+  @@map("categorias")
+}
+
+model Producto {
+  id              String            @id @default(uuid()) @db.Uuid
+  codigoInterno   String            @unique @map("codigo_interno") @db.VarChar(50)
+  nombre          String            @db.VarChar(200)
+  categoriaId     String            @map("categoria_id") @db.Uuid
+  precioMayorista Decimal           @map("precio_mayorista") @db.Decimal(12, 2)
+  precioMinorista Decimal           @map("precio_minorista") @db.Decimal(12, 2)
+  costo           Decimal           @db.Decimal(12, 2)
+  stockActual     Int               @map("stock_actual")
+  stockMinimo     Int               @map("stock_minimo")
+  activo          Boolean           @default(true)
+  categoria       Categoria         @relation(fields: [categoriaId], references: [id])
+  movimientos     MovimientoStock[]
+  compraItems     CompraItem[]
+  remitoItems     RemitoItem[]
+  createdAt       DateTime          @default(now()) @map("created_at")
+  updatedAt       DateTime          @updatedAt @map("updated_at")
+
+  @@index([activo])
+  @@index([categoriaId])
+  @@map("productos")
+}
+
+model MovimientoStock {
+  id              String         @id @default(uuid()) @db.Uuid
+  productoId      String         @map("producto_id") @db.Uuid
+  tipo            MovimientoTipo
+  cantidad        Int
+  stockResultante Int            @map("stock_resultante")
+  referenciaId    String?        @map("referencia_id") @db.Uuid
+  referenciaTipo  String?        @map("referencia_tipo") @db.VarChar(50)
+  motivo          String?        @db.VarChar(300)
+  usuarioId       String         @map("usuario_id") @db.Uuid
+  producto        Producto       @relation(fields: [productoId], references: [id])
+  usuario         User           @relation(fields: [usuarioId], references: [id])
+  createdAt       DateTime       @default(now()) @map("created_at")
+
+  @@index([productoId])
+  @@index([createdAt])
+  @@map("movimientos_stock")
+}
+
+model Cliente {
+  id              String    @id @default(uuid()) @db.Uuid
+  nombre          String    @db.VarChar(150)
+  empresa         String?   @db.VarChar(150)
+  direccion       String?   @db.VarChar(300)
+  telefono        String?   @db.VarChar(30)
+  email           String?   @db.VarChar(150)
+  observaciones   String?
+  saldoPendiente  Decimal   @default(0) @map("saldo_pendiente") @db.Decimal(12, 2)
+  activo          Boolean   @default(true)
+  remitos         Remito[]
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  @@index([activo])
+  @@map("clientes")
+}
+
+model Compra {
+  id              String       @id @default(uuid()) @db.Uuid
+  proveedorNombre String       @map("proveedor_nombre") @db.VarChar(150)
+  fecha           DateTime     @db.Date
+  total           Decimal      @db.Decimal(12, 2)
+  estado          CompraEstado @default(ACTIVA)
+  usuarioId       String       @map("usuario_id") @db.Uuid
+  usuario         User         @relation(fields: [usuarioId], references: [id])
+  items           CompraItem[]
+  createdAt       DateTime     @default(now()) @map("created_at")
+  updatedAt       DateTime     @updatedAt @map("updated_at")
+
+  @@index([fecha])
+  @@index([estado])
+  @@map("compras")
+}
+
+model CompraItem {
+  id              String   @id @default(uuid()) @db.Uuid
+  compraId        String   @map("compra_id") @db.Uuid
+  productoId      String   @map("producto_id") @db.Uuid
+  cantidad        Int
+  costoUnitario   Decimal  @map("costo_unitario") @db.Decimal(12, 2)
+  actualizarCosto Boolean  @map("actualizar_costo")
+  subtotal        Decimal  @db.Decimal(12, 2)
+  compra          Compra   @relation(fields: [compraId], references: [id])
+  producto        Producto @relation(fields: [productoId], references: [id])
+
+  @@index([productoId])
+  @@map("compra_items")
+}
+
+model Remito {
+  id                    String        @id @default(uuid()) @db.Uuid
+  numero                Int           @unique @default(autoincrement())
+  clienteId             String        @map("cliente_id") @db.Uuid
+  listaPrecios          ListaPrecios  @map("lista_precios")
+  saldoClienteAlEmitir  Decimal       @map("saldo_cliente_al_emitir") @db.Decimal(12, 2)
+  total                 Decimal       @db.Decimal(12, 2)
+  estado                RemitoEstado  @default(ACTIVO)
+  fecha                 DateTime      @db.Date
+  usuarioId             String        @map("usuario_id") @db.Uuid
+  cliente               Cliente       @relation(fields: [clienteId], references: [id])
+  usuario               User          @relation(fields: [usuarioId], references: [id])
+  items                 RemitoItem[]
+  createdAt             DateTime      @default(now()) @map("created_at")
+  updatedAt             DateTime      @updatedAt @map("updated_at")
+
+  @@index([clienteId])
+  @@index([estado])
+  @@index([fecha])
+  @@map("remitos")
+}
+
+model RemitoItem {
+  id             String   @id @default(uuid()) @db.Uuid
+  remitoId       String   @map("remito_id") @db.Uuid
+  productoId     String   @map("producto_id") @db.Uuid
+  codigoProducto String   @map("codigo_producto") @db.VarChar(50)
+  nombreProducto String   @map("nombre_producto") @db.VarChar(200)
+  cantidad       Int
+  precioUnitario Decimal  @map("precio_unitario") @db.Decimal(12, 2)
+  subtotal       Decimal  @db.Decimal(12, 2)
+  remito         Remito   @relation(fields: [remitoId], references: [id], onDelete: Cascade)
+  producto       Producto @relation(fields: [productoId], references: [id])
+
+  @@index([productoId])
+  @@map("remito_items")
+}

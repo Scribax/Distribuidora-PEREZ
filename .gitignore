@@ -1,0 +1,13 @@
+node_modules
+.dual-graph
+dist
+apps/**/dist
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+coverage
+*.log
+backups
+tmp
+Captura de pantalla *.png

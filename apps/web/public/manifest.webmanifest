@@ -1,0 +1,15 @@
+{
+  "name": "PEREZ MARTIN Distribuidora",
+  "short_name": "PEREZ MARTIN",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#166534",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+FROM node:24-alpine AS deps
+WORKDIR /app
+COPY package*.json ./
+COPY apps/api/package*.json apps/api/
+RUN npm install
+
+FROM deps AS build
+COPY apps/api apps/api
+RUN npm run prisma:generate -w apps/api
+RUN npm run build -w apps/api
+
+FROM node:24-alpine
+WORKDIR /app
+ENV NODE_ENV=production
+COPY --from=deps /app/node_modules node_modules
+COPY --from=build /app/apps/api/dist apps/api/dist
+COPY apps/api/src/brand-logo.png apps/api/dist/src/brand-logo.png
+COPY --from=build /app/apps/api/prisma apps/api/prisma
+COPY apps/api/package.json apps/api/package.json
+CMD ["node", "apps/api/dist/src/server.js"]
