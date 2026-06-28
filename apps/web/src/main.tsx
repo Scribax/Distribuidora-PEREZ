@@ -427,12 +427,12 @@ function ClientDetail({ client, canWrite, canEditBalance, onUpdate, onClose, onP
   const totalRemitos = activeRemitos.reduce((sum, r) => sum + Number(r.total), 0);
   const lastRemito = remitos[0];
   const remitoRows = [...remitos].sort((a, b) => {
-    const debtA = Math.max(Number(a.total) - Number(a.montoPagado ?? 0), 0);
-    const debtB = Math.max(Number(b.total) - Number(b.montoPagado ?? 0), 0);
+    const debtA = remitoPending(a);
+    const debtB = remitoPending(b);
     if (debtA !== debtB) return debtB - debtA;
     return Number(b.numero) - Number(a.numero);
   }).map(formatRemitoRow);
-  const pendingRemitos = activeRemitos.filter((r) => Math.max(Number(r.total) - Number(r.montoPagado ?? 0), 0) > 0);
+  const pendingRemitos = activeRemitos.filter((r) => remitoPending(r) > 0);
   return <section className="panel detail-panel client-profile">
     <div className="client-hero"><div><h2>{client.nombre}</h2><span>{client.empresa ?? "Sin empresa registrada"}</span></div><button type="button" className="icon-button" onClick={onClose} title="Cerrar detalle"><X size={18} /></button></div>
     <div className="detail-grid">
@@ -448,11 +448,12 @@ function ClientDetail({ client, canWrite, canEditBalance, onUpdate, onClose, onP
 
 function ClientRemitoCard({ row, onPdf }: { row: any; onPdf: (row: any) => void }) {
   const [open, setOpen] = useState(false);
-  const pending = Math.max(Number(row.total) - Number(row.montoPagado ?? 0), 0);
+  const pending = remitoPending(row);
+  const paid = row.pagoEstado === "PAGADA" ? Number(row.total) : Number(row.montoPagado ?? 0);
   return <article className={`client-remito-card ${pending > 0 ? "pending" : ""}`}>
     <div><strong>Boleta #{row.numero}</strong><span>{row.fechaCorta} · {row.itemsCount} ítem{row.itemsCount === 1 ? "" : "s"}</span></div>
     <div className="sale-badges"><span className={`status-chip ${String(row.pagoEstado).toLowerCase()}`}>{row.pagoEstado}</span><span className={`status-chip ${String(row.estado).toLowerCase()}`}>{row.estado}</span></div>
-    <div><strong>{row.totalFmt}</strong><span>Pagado {row.pagadoFmt} · pendiente {money(pending)}</span></div>
+    <div><strong>{row.totalFmt}</strong><span>Pagado {money(paid)} · pendiente {money(pending)}</span></div>
     <div className="client-remito-actions"><button type="button" className="secondary" onClick={() => setOpen(!open)}>{open ? "Ocultar" : "Ver detalle"}</button><button type="button" className="secondary" onClick={() => onPdf(row)}>PDF</button></div>
     {open && <div className="client-remito-detail"><div><strong>Vendedor</strong><span>{row.vendedor?.nombre ?? "Sin vendedor"}</span></div><div><strong>Productos</strong><span>{(row.items ?? []).map((item: any) => `${item.cantidad} x ${item.nombreProducto}`).join(" · ") || "-"}</span></div></div>}
   </article>;
@@ -727,8 +728,8 @@ function RemittancesView({ api, canWrite }: { api: ReturnType<typeof useApi>; ca
   const totals = remitos.reduce((acc, remito) => {
     if (remito.estado === "ACTIVO") {
       acc.total += Number(remito.total);
-      acc.paid += Number(remito.montoPagado ?? 0);
-      if (remito.pagoEstado !== "PAGADA") acc.pending += Number(remito.total) - Number(remito.montoPagado ?? 0);
+      acc.paid += remito.pagoEstado === "PAGADA" ? Number(remito.total) : Number(remito.montoPagado ?? 0);
+      acc.pending += remitoPending(remito);
     }
     return acc;
   }, { total: 0, paid: 0, pending: 0 });
@@ -788,13 +789,14 @@ function remitoItemsFrom(items: any[], products: Product[]) {
 }
 
 function SaleCard({ row, onOpen, onPdf, onCancel }: { row: any; onOpen: (row: any) => void; onPdf: (row: any) => void; onCancel?: (row: any) => void }) {
-  const pending = Math.max(Number(row.total) - Number(row.montoPagado ?? 0), 0);
+  const pending = remitoPending(row);
+  const paid = row.pagoEstado === "PAGADA" ? Number(row.total) : Number(row.montoPagado ?? 0);
   return <article className="sale-card">
     <button type="button" className="sale-main" onClick={() => onOpen(row)}>
       <div className="sale-title"><strong>Boleta #{row.numero}</strong><span>{row.fechaCorta}</span></div>
       <div className="sale-client"><strong>{row.cliente?.nombre ?? "Cliente"}</strong><span>{row.vendedor?.nombre ?? "Sin vendedor"}</span></div>
       <div className="sale-badges"><span className={`status-chip ${String(row.pagoEstado).toLowerCase()}`}>{row.pagoEstado}</span><span className={`status-chip ${String(row.estado).toLowerCase()}`}>{row.estado}</span></div>
-      <div className="sale-money"><strong>{row.totalFmt}</strong><span>Pagado {row.pagadoFmt} · pendiente {money(pending)}</span></div>
+      <div className="sale-money"><strong>{row.totalFmt}</strong><span>Pagado {money(paid)} · pendiente {money(pending)}</span></div>
     </button>
     <div className="sale-actions"><button type="button" className="secondary" onClick={() => onPdf(row)}>PDF</button>{onCancel && <button type="button" className="secondary" onClick={() => onCancel(row)}>Cancelar</button>}</div>
   </article>;
@@ -802,7 +804,8 @@ function SaleCard({ row, onOpen, onPdf, onCancel }: { row: any; onOpen: (row: an
 
 function RemitoDetail({ selected, canWrite, activeVendors, editItems, products, editProductId, savingEdit, editSaved, onClose, onSaveEdit, onMarkPaid, onEditProductChange, onEditItemsChange, onAddEditItem }: { selected: any; canWrite: boolean; activeVendors: Vendor[]; editItems: LineItem[]; products: Product[]; editProductId: string; savingEdit: boolean; editSaved: boolean; onClose: () => void; onSaveEdit: (event: React.FormEvent<HTMLFormElement>) => void; onMarkPaid: () => void; onEditProductChange: (value: string) => void; onEditItemsChange: React.Dispatch<React.SetStateAction<LineItem[]>>; onAddEditItem: (event: React.FormEvent<HTMLFormElement>) => void }) {
   const [advancedOpen, setAdvancedOpen] = useState(false);
-  const pending = Math.max(Number(selected.total) - Number(selected.montoPagado ?? 0), 0);
+  const pending = remitoPending(selected);
+  const paid = selected.pagoEstado === "PAGADA" ? Number(selected.total) : Number(selected.montoPagado ?? 0);
   const commission = selected.vendedor ? Number(selected.total) * Number(selected.vendedor.porcentajeComision) / 100 : 0;
   const isPaid = selected.pagoEstado === "PAGADA" || pending <= 0;
   const itemCount = selected.items?.reduce((sum: number, item: any) => sum + Number(item.cantidad ?? 0), 0) ?? 0;
@@ -816,7 +819,7 @@ function RemitoDetail({ selected, canWrite, activeVendors, editItems, products, 
       <div>
         <span className="eyebrow">{isPaid ? "Cobro cerrado" : "Saldo a cobrar"}</span>
         <strong>{isPaid ? money(selected.total) : money(pending)}</strong>
-        <small>{isPaid ? `Pagada ${paymentLabel !== "Sin método" ? `por ${paymentLabel.toLowerCase()}` : ""}` : `Pagado hasta ahora: ${money(selected.montoPagado ?? 0)}`}</small>
+        <small>{isPaid ? `Pagada ${paymentLabel !== "Sin método" ? `por ${paymentLabel.toLowerCase()}` : ""}` : `Pagado hasta ahora: ${money(paid)}`}</small>
       </div>
       <div className="remito-focus-actions">
         <span className={`status-chip ${String(selected.pagoEstado).toLowerCase()}`}>{selected.pagoEstado}</span>
@@ -1278,6 +1281,11 @@ function formatDate(value: string) {
 
 function formatRemitoRow(r: any) {
   return { ...r, fechaCorta: formatDate(r.fecha), totalFmt: money(r.total), pagadoFmt: money(r.montoPagado ?? 0), itemsCount: r.items?.length ?? 0 };
+}
+
+function remitoPending(row: any) {
+  if (row.pagoEstado === "PAGADA") return 0;
+  return Math.max(Number(row.total) - Number(row.montoPagado ?? 0), 0);
 }
 
 function formatRemitoItemRow(item: any) {

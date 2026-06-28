@@ -18,7 +18,13 @@ const brandLogoPath = path.resolve(__dirname, "../brand-logo.png");
 
 function normalizePayment(total: number, montoPagado: number, pagoEstado?: PagoEstado) {
   const paid = Math.min(Math.max(montoPagado, 0), total);
-  if (pagoEstado) return { montoPagado: paid, pagoEstado };
+  if (pagoEstado === PagoEstado.PAGADA) return { montoPagado: total, pagoEstado };
+  if (pagoEstado === PagoEstado.PENDIENTE) return { montoPagado: 0, pagoEstado };
+  if (pagoEstado === PagoEstado.PARCIAL) {
+    if (paid <= 0) return { montoPagado: 0, pagoEstado: PagoEstado.PENDIENTE };
+    if (paid >= total) return { montoPagado: total, pagoEstado: PagoEstado.PAGADA };
+    return { montoPagado: paid, pagoEstado };
+  }
   if (paid <= 0) return { montoPagado: paid, pagoEstado: PagoEstado.PENDIENTE };
   if (paid >= total) return { montoPagado: paid, pagoEstado: PagoEstado.PAGADA };
   return { montoPagado: paid, pagoEstado: PagoEstado.PARCIAL };
@@ -31,6 +37,11 @@ function totalWithDiscount(subtotal: number, descuentoPorcentaje: number) {
 
 function remitoDebt(total: number, montoPagado: number) {
   return Number(Math.max(total - montoPagado, 0).toFixed(2));
+}
+
+function remitoPending(total: number, montoPagado: number, pagoEstado?: string) {
+  if (pagoEstado === PagoEstado.PAGADA) return 0;
+  return remitoDebt(total, montoPagado);
 }
 
 remittancesRouter.get("/", async (req, res) => {
@@ -105,7 +116,7 @@ remittancesRouter.post("/", requireRoles(Rol.ADMINISTRADOR, Rol.EMPLEADO), async
     const subtotal = items.reduce((sum, item) => sum + item.subtotal, 0);
     const total = totalWithDiscount(subtotal, input.descuentoPorcentaje);
     const payment = normalizePayment(total, input.montoPagado, input.pagoEstado as PagoEstado | undefined);
-    const pendingDebt = remitoDebt(total, payment.montoPagado);
+    const pendingDebt = remitoPending(total, payment.montoPagado, payment.pagoEstado);
     const saldoClienteAlEmitir = Number(cliente.saldoPendiente) + pendingDebt;
     const created = await tx.remito.create({
       data: {
@@ -212,8 +223,8 @@ remittancesRouter.put("/:id", requireRoles(Rol.ADMINISTRADOR, Rol.EMPLEADO), asy
       total = totalWithDiscount(subtotal, input.descuentoPorcentaje);
     }
     const payment = normalizePayment(total, input.montoPagado ?? Number(remito.montoPagado), input.pagoEstado as PagoEstado | undefined);
-    const previousDebt = remitoDebt(Number(remito.total), Number(remito.montoPagado));
-    const nextDebt = remitoDebt(total, payment.montoPagado);
+    const previousDebt = remitoPending(Number(remito.total), Number(remito.montoPagado), remito.pagoEstado);
+    const nextDebt = remitoPending(total, payment.montoPagado, payment.pagoEstado);
     const debtDelta = nextDebt - previousDebt;
     if (debtDelta !== 0) {
       await tx.cliente.update({
@@ -247,7 +258,7 @@ remittancesRouter.post("/:id/cancelar", requireRoles(Rol.ADMINISTRADOR, Rol.EMPL
 
   await prisma.$transaction(async (tx) => {
     const updated = await tx.remito.update({ where: { id: remito.id }, data: { estado: "CANCELADO" }, include: { items: true } });
-    const pendingDebt = remitoDebt(Number(remito.total), Number(remito.montoPagado));
+    const pendingDebt = remitoPending(Number(remito.total), Number(remito.montoPagado), remito.pagoEstado);
     if (pendingDebt !== 0) {
       await tx.cliente.update({
         where: { id: remito.clienteId },
@@ -282,8 +293,8 @@ remittancesRouter.get("/:id/pdf", async (req, res) => {
   const doc = new PDFDocument({ size: "A4", margin: 32 });
   doc.pipe(res);
   const money = (value: unknown) => `$${Number(value).toFixed(2)}`;
-  const saldoPendienteBoleta = Math.max(Number(remito.saldoClienteAlEmitir), remitoDebt(Number(remito.total), Number(remito.montoPagado)));
-  const deudaBoleta = remitoDebt(Number(remito.total), Number(remito.montoPagado));
+  const deudaBoleta = remitoPending(Number(remito.total), Number(remito.montoPagado), remito.pagoEstado);
+  const saldoPendienteBoleta = remito.pagoEstado === PagoEstado.PAGADA ? Number(remito.saldoClienteAlEmitir) : Math.max(Number(remito.saldoClienteAlEmitir), deudaBoleta);
   const discountAmount = Number(remito.subtotal) - Number(remito.total);
   const pageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
   const left = doc.page.margins.left;
