@@ -12,7 +12,8 @@ type Session = { accessToken: string; refreshToken: string; user: User };
 type Product = { id: string; codigoInterno: string; nombre: string; stockActual: number; stockMinimo: number; precioMayorista: string; precioMinorista: string; costo: string; activo: boolean; categoriaId?: string; categoria?: { id?: string; nombre: string }; movimientos?: any[] };
 type Client = { id: string; nombre: string; empresa?: string; direccion?: string; telefono?: string; email?: string; observaciones?: string; saldoPendiente: string; activo: boolean; remitos?: any[] };
 type Vendor = { id: string; nombre: string; porcentajeComision: string; activo: boolean };
-type Dashboard = { ventasMes: number; comprasMes: number; balanceMes: number; valorStock: number; stockBajo: Product[]; ultimosRemitos: any[]; chart: { mes: string; ventas: number; compras: number }[] };
+type Supplier = { id: string; nombre: string; contacto?: string; telefono?: string; email?: string; cuit?: string; direccion?: string; observaciones?: string; activo: boolean };
+type Dashboard = { ventasMes: number; comprasMes: number; costoVendidoMes: number; gastosMes: number; gananciaBrutaMes: number; balanceMes: number; valorStock: number; stockBajo: Product[]; ultimosRemitos: any[]; chart: { mes: string; ventas: number; compras: number; costoVendido: number; gananciaBruta: number; gastos: number; gananciaNeta: number }[] };
 type LineItem = { product: Product; cantidad: number; costoUnitario?: number; actualizarCosto?: boolean };
 
 function money(value: number | string) {
@@ -117,9 +118,10 @@ function App() {
     ["clientes", Users, "Clientes"],
     ["compras", ShoppingCart, "Compras"],
     ["remitos", ReceiptText, "Ventas"],
+    ...(session.user.rol === "CONSULTA" ? [] : [["gastos", Calculator, "Gastos"] as const]),
     ...(session.user.rol === "CONSULTA" ? [] : [["balance", Calculator, "Balance"] as const]),
     ...(session.user.rol === "CONSULTA" ? [] : [["informes", BarChart3, "Informes"] as const]),
-    ...(session.user.rol === "CONSULTA" ? [] : [["vendedores", UserCog, "Vendedores"] as const]),
+    ...(session.user.rol === "CONSULTA" ? [] : [["comerciales", UserCog, "Comerciales"] as const]),
     ["stock", PackagePlus, "Stock"],
     ...(session.user.rol === "ADMINISTRADOR" ? [["usuarios", UserCog, "Usuarios"] as const] : [])
   ] as const;
@@ -136,9 +138,10 @@ function App() {
       {view === "clientes" && <ClientsView api={api} canWrite={session.user.rol !== "CONSULTA"} canEditBalance={session.user.rol === "ADMINISTRADOR"} />}
       {view === "compras" && <PurchasesView api={api} canWrite={session.user.rol !== "CONSULTA"} isAdmin={session.user.rol === "ADMINISTRADOR"} />}
       {view === "remitos" && <RemittancesView api={api} canWrite={session.user.rol !== "CONSULTA"} />}
+      {view === "gastos" && <ExpensesView api={api} isAdmin={session.user.rol === "ADMINISTRADOR"} />}
       {view === "balance" && <BalanceView api={api} />}
       {view === "informes" && <ReportsView api={api} />}
-      {view === "vendedores" && <VendorsView api={api} />}
+      {view === "comerciales" && <CommercialsView api={api} isAdmin={session.user.rol === "ADMINISTRADOR"} canWrite={session.user.rol !== "CONSULTA"} />}
       {view === "stock" && <StockView api={api} isAdmin={session.user.rol === "ADMINISTRADOR"} />}
       {view === "usuarios" && <UsersView api={api} />}
     </section>
@@ -152,12 +155,13 @@ function DashboardView({ api }: { api: ReturnType<typeof useApi> }) {
   return <>
     <div className="metrics">
       <Metric label="Ventas del mes" value={money(data.ventasMes)} />
-      <Metric label="Compras del mes" value={money(data.comprasMes)} />
-      <Metric label="Balance" value={money(data.balanceMes)} />
+      <Metric label="Costo vendido" value={money(data.costoVendidoMes ?? 0)} />
+      <Metric label="Gastos" value={money(data.gastosMes ?? 0)} />
+      <Metric label="Ganancia neta" value={money(data.balanceMes)} />
       <Metric label="Valor stock" value={money(data.valorStock)} />
     </div>
     <div className="grid two">
-      <section className="panel"><h2>Ventas vs compras</h2><ResponsiveContainer width="100%" height={260}><BarChart data={data.chart}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="mes" /><YAxis /><Tooltip /><Legend /><Bar dataKey="ventas" fill="#d71920" /><Bar dataKey="compras" fill="#2563eb" /></BarChart></ResponsiveContainer></section>
+      <section className="panel"><h2>Ventas y ganancia</h2><ResponsiveContainer width="100%" height={260}><BarChart data={data.chart}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="mes" /><YAxis /><Tooltip /><Legend /><Bar dataKey="ventas" fill="#d71920" /><Bar dataKey="gananciaNeta" fill="#166534" /><Bar dataKey="gastos" fill="#2563eb" /></BarChart></ResponsiveContainer></section>
       <section className="panel"><h2>Stock bajo</h2>{data.stockBajo.length ? data.stockBajo.map((p) => <Row key={p.id} title={p.nombre} meta={`${p.stockActual} / mínimo ${p.stockMinimo}`} />) : <p>Sin alertas.</p>}</section>
     </div>
     <section className="panel"><h2>Últimas boletas</h2><Table rows={data.ultimosRemitos.map(formatRemitoRow)} cols={[["numero", "Nro"], ["cliente.nombre", "Cliente"], ["totalFmt", "Total"], ["pagoEstado", "Pago"], ["estado", "Estado"]]} /></section>
@@ -461,15 +465,18 @@ function InfoItem({ label, value }: { label: string; value: string }) {
 function PurchasesView({ api, canWrite, isAdmin }: { api: ReturnType<typeof useApi>; canWrite: boolean; isAdmin: boolean }) {
   const [items, setItems] = useState<any[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [selected, setSelected] = useState<any | null>(null);
   const [purchaseItems, setPurchaseItems] = useState<LineItem[]>([]);
   const [supplierName, setSupplierName] = useState("");
+  const [supplierId, setSupplierId] = useState("");
   const [filters, setFilters] = useState({ proveedor: "", productoId: "", fechaDesde: "", fechaHasta: "" });
   const [error, setError] = useState("");
   const load = (next = filters) => Promise.all([
     api(`/compras?${qs({ ...next, pageSize: 100 })}`),
-    api("/productos?estado=ACTIVO&pageSize=100")
-  ]).then(([c, p]) => { setItems(c.items); setProducts(p.items); });
+    api("/productos?estado=ACTIVO&pageSize=100"),
+    api("/proveedores?pageSize=100")
+  ]).then(([c, p, s]) => { setItems(c.items); setProducts(p.items); setSuppliers(s.items); });
   useEffect(() => { load(); }, []);
   async function openPurchase(row: any) {
     setSelected(await api(`/compras/${row.id}`));
@@ -501,16 +508,16 @@ function PurchasesView({ api, canWrite, isAdmin }: { api: ReturnType<typeof useA
     setError("");
     if (!purchaseItems.length) return setError("Agregá al menos un producto a la compra.");
     try {
-      await api("/compras", { method: "POST", body: JSON.stringify({ proveedorNombre: form.proveedorNombre, fecha: form.fecha, items: purchaseItems.map((item) => ({ productoId: item.product.id, cantidad: item.cantidad, costoUnitario: item.costoUnitario ?? 0, actualizarCosto: item.actualizarCosto ?? true })) }) });
+      await api("/compras", { method: "POST", body: JSON.stringify({ proveedorId: supplierId || null, proveedorNombre: form.proveedorNombre, fecha: form.fecha, items: purchaseItems.map((item) => ({ productoId: item.product.id, cantidad: item.cantidad, costoUnitario: item.costoUnitario ?? 0, actualizarCosto: item.actualizarCosto ?? true })) }) });
       formEl.reset();
       setSupplierName("");
+      setSupplierId("");
       setPurchaseItems([]);
       await load();
     } catch (err: any) {
       setError(err.message ?? "No se pudo registrar la compra");
     }
   }
-  const suppliers = Array.from(new Set(items.map((item) => String(item.proveedorNombre ?? "").trim()).filter(Boolean))).map((nombre) => ({ id: nombre, nombre }));
   const total = purchaseItems.reduce((sum, item) => sum + item.cantidad * (item.costoUnitario ?? 0), 0);
   const rows = items.map(formatPurchaseRow);
   return <div className="purchase-page">
@@ -525,7 +532,7 @@ function PurchasesView({ api, canWrite, isAdmin }: { api: ReturnType<typeof useA
         <div className="step-block">
           <span className="step-badge">1</span>
           <form id="new-purchase" className="form-grid" onSubmit={create}>
-            <SupplierPicker suppliers={suppliers} value={supplierName} onChange={setSupplierName} />
+            <SupplierPicker suppliers={suppliers.filter((supplier) => supplier.activo)} value={supplierId} manualName={supplierName} onChange={(supplier) => { setSupplierId(supplier?.id ?? ""); setSupplierName(supplier?.nombre ?? ""); }} onManualNameChange={(value) => { setSupplierName(value); setSupplierId(""); }} />
             <input name="fecha" type="date" defaultValue={dateInput()} required />
           </form>
         </div>
@@ -562,12 +569,11 @@ function PurchaseDetail({ purchase, onClose }: { purchase: any; onClose: () => v
   return <div className="detail-panel"><div className="detail-head"><div><h2>{purchase.proveedorNombre}</h2><span>{formatDate(purchase.fecha)} · {purchase.estado}</span></div><button type="button" className="icon-button" onClick={onClose} title="Cerrar detalle"><X size={18} /></button></div><Metric label="Total compra" value={money(purchase.total)} /><Table rows={rows} cols={[["productoNombre", "Producto"], ["cantidad", "Cantidad"], ["costoFmt", "Costo"], ["subtotalFmt", "Subtotal"], ["actualizarFmt", "Actualizó costo"]]} /></div>;
 }
 
-function SupplierPicker({ suppliers, value, onChange }: { suppliers: { id: string; nombre: string }[]; value: string; onChange: (value: string) => void }) {
-  const selected = suppliers.find((supplier) => supplier.nombre === value);
+function SupplierPicker({ suppliers, value, manualName, onChange, onManualNameChange }: { suppliers: Supplier[]; value: string; manualName: string; onChange: (supplier: Supplier | null) => void; onManualNameChange: (value: string) => void }) {
   return <div className="supplier-picker">
-    <input type="hidden" name="proveedorNombre" value={value} required />
-    <EntityPicker items={suppliers} value={selected?.id ?? ""} onChange={(id) => onChange(suppliers.find((supplier) => supplier.id === id)?.nombre ?? "")} title="Elegir proveedor" placeholder="Elegir proveedor existente" searchPlaceholder="Buscar proveedor" getLabel={(supplier) => supplier.nombre} getMeta={() => "Proveedor usado en compras anteriores"} />
-    <input value={value} onChange={(event) => onChange(event.target.value)} placeholder="O escribir proveedor nuevo" required />
+    <input type="hidden" name="proveedorNombre" value={manualName} required />
+    <EntityPicker items={suppliers} value={value} onChange={(id) => onChange(suppliers.find((supplier) => supplier.id === id) ?? null)} title="Elegir proveedor" placeholder="Elegir proveedor cargado" searchPlaceholder="Buscar proveedor, contacto o CUIT" getLabel={(supplier) => supplier.nombre} getMeta={(supplier) => `${supplier.contacto ?? "Sin contacto"} · ${supplier.telefono ?? "sin teléfono"}`} />
+    <input value={manualName} onChange={(event) => onManualNameChange(event.target.value)} placeholder="O escribir proveedor ocasional" required />
   </div>;
 }
 
@@ -587,6 +593,8 @@ function RemittancesView({ api, canWrite }: { api: ReturnType<typeof useApi>; ca
   const [editProductId, setEditProductId] = useState("");
   const [filters, setFilters] = useState({ numero: "", clienteId: "", vendedorId: "", estado: "", pagoEstado: "", fechaDesde: "", fechaHasta: "" });
   const [error, setError] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editSaved, setEditSaved] = useState(false);
   const load = (next = filters) => Promise.all([
     api(`/remitos?${qs({ ...next, pageSize: 100 })}`),
     api("/productos?estado=ACTIVO&pageSize=100"),
@@ -595,6 +603,7 @@ function RemittancesView({ api, canWrite }: { api: ReturnType<typeof useApi>; ca
   ]).then(([r, p, c, v]) => { setRemitos(r.items); setProducts(p.items); setClients(c.items); setVendors(v.items); });
   useEffect(() => { load(); }, []);
   async function openRemito(row: any) {
+    setEditSaved(false);
     const full = await api(`/remitos/${row.id}`);
     setSelected(full);
     setEditItems(remitoItemsFrom(full.items ?? [], products));
@@ -638,6 +647,9 @@ function RemittancesView({ api, canWrite }: { api: ReturnType<typeof useApi>; ca
     event.preventDefault();
     if (!selected) return;
     const form = payload(event.currentTarget);
+    setSavingEdit(true);
+    setEditSaved(false);
+    setError("");
     try {
       const updated = await api(`/remitos/${selected.id}`, {
         method: "PUT",
@@ -651,9 +663,29 @@ function RemittancesView({ api, canWrite }: { api: ReturnType<typeof useApi>; ca
         })
       });
       setSelected(updated);
+      setEditSaved(true);
       await load();
     } catch (err: any) {
       setError(err.message ?? "No se pudo editar la boleta");
+    } finally {
+      setSavingEdit(false);
+    }
+  }
+  async function markAsPaid() {
+    if (!selected) return;
+    try {
+      const updated = await api(`/remitos/${selected.id}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          pagoEstado: "PAGADA",
+          montoPagado: Number(selected.total),
+          metodoPago: selected.metodoPago ?? null
+        })
+      });
+      setSelected(updated);
+      await load();
+    } catch (err: any) {
+      setError(err.message ?? "No se pudo marcar como pagada");
     }
   }
   async function create(event: React.FormEvent<HTMLFormElement>) {
@@ -723,7 +755,7 @@ function RemittancesView({ api, canWrite }: { api: ReturnType<typeof useApi>; ca
         <div className="sales-list">{remitoRows.map((row) => <SaleCard key={row.id} row={row} onOpen={openRemito} onPdf={openPdf} onCancel={canWrite && row.estado === "ACTIVO" ? cancelRemito : undefined} />)}{!remitoRows.length && <p className="muted">No hay boletas con estos filtros.</p>}</div>
       </section>
     </section>
-    {selected && <section className="panel detail-panel"><div className="detail-head"><div><h2>Boleta #{selected.numero}</h2><span>{selected.cliente?.nombre} · {selected.estado}</span></div><button type="button" className="icon-button" onClick={() => setSelected(null)} title="Cerrar detalle"><X size={18} /></button></div><div className="detail-grid"><Metric label="Fecha" value={formatDate(selected.fecha)} /><Metric label="Subtotal" value={money(selected.subtotal ?? selected.total)} /><Metric label="Descuento" value={`${Number(selected.descuentoPorcentaje ?? 0)}%`} /><Metric label="Total" value={money(selected.total)} /><Metric label="Pagado" value={money(selected.montoPagado)} /><Metric label="Pago" value={selected.pagoEstado} /><Metric label="Vendedor" value={selected.vendedor?.nombre ?? "-"} /><Metric label="Comisión" value={money(selected.vendedor ? Number(selected.total) * Number(selected.vendedor.porcentajeComision) / 100 : 0)} /></div><Table rows={(selected.items ?? []).map(formatRemitoItemRow)} cols={[["codigoProducto", "Código"], ["nombreProducto", "Producto"], ["cantidad", "Cantidad"], ["precioFmt", "Unitario"], ["subtotalFmt", "Subtotal"]]} />{canWrite && selected.estado === "ACTIVO" && <form className="form" onSubmit={saveEdit}><h3>Editar boleta</h3><div className="form-grid"><select name="vendedorId" defaultValue={selected.vendedorId ?? ""}><option value="">Sin vendedor</option>{activeVendors.map((v) => <option value={v.id} key={v.id}>{v.nombre} · {Number(v.porcentajeComision)}%</option>)}</select><select name="pagoEstado" defaultValue={selected.pagoEstado}><option value="PENDIENTE">Pendiente</option><option value="PARCIAL">Parcial</option><option value="PAGADA">Pagada</option></select><select name="metodoPago" defaultValue={selected.metodoPago ?? ""}><option value="">Sin método</option><option value="EFECTIVO">Efectivo</option><option value="TRANSFERENCIA">Transferencia</option><option value="TARJETA">Tarjeta</option><option value="CHEQUE">Cheque</option><option value="OTRO">Otro</option></select><input name="montoPagado" type="number" step="0.01" min="0" defaultValue={Number(selected.montoPagado)} placeholder="Monto pagado" /><input name="descuentoPorcentaje" type="number" step="0.01" min="0" max="100" defaultValue={Number(selected.descuentoPorcentaje ?? 0)} placeholder="% descuento" /></div><ItemList items={editItems} mode="remito" priceList={selected.listaPrecios} onRemove={(id) => setEditItems((current) => current.filter((item) => item.product.id !== id))} /><div className="add-line"><ProductPicker products={products} name="productoId" form="edit-remito-product" value={editProductId} onChange={setEditProductId} /><input name="cantidad" form="edit-remito-product" type="number" min="1" placeholder="Cantidad" required /><button type="submit" form="edit-remito-product">Agregar</button></div><Metric label="Nuevo subtotal" value={money(editItems.reduce((sum, item) => sum + item.cantidad * itemPrice(item.product, selected.listaPrecios), 0))} /><button>Guardar cambios</button></form>}<form id="edit-remito-product" onSubmit={addEditItem} /></section>}
+    {selected && <RemitoDetail selected={selected} canWrite={canWrite} activeVendors={activeVendors} editItems={editItems} products={products} editProductId={editProductId} savingEdit={savingEdit} editSaved={editSaved} onClose={() => setSelected(null)} onSaveEdit={saveEdit} onMarkPaid={markAsPaid} onEditProductChange={setEditProductId} onEditItemsChange={setEditItems} onAddEditItem={addEditItem} />}
     {canWrite && <section className="panel remito-builder" id="crear-boleta">
       <h2>Crear boleta</h2>
       <form className="form" onSubmit={create}>
@@ -766,6 +798,66 @@ function SaleCard({ row, onOpen, onPdf, onCancel }: { row: any; onOpen: (row: an
     </button>
     <div className="sale-actions"><button type="button" className="secondary" onClick={() => onPdf(row)}>PDF</button>{onCancel && <button type="button" className="secondary" onClick={() => onCancel(row)}>Cancelar</button>}</div>
   </article>;
+}
+
+function RemitoDetail({ selected, canWrite, activeVendors, editItems, products, editProductId, savingEdit, editSaved, onClose, onSaveEdit, onMarkPaid, onEditProductChange, onEditItemsChange, onAddEditItem }: { selected: any; canWrite: boolean; activeVendors: Vendor[]; editItems: LineItem[]; products: Product[]; editProductId: string; savingEdit: boolean; editSaved: boolean; onClose: () => void; onSaveEdit: (event: React.FormEvent<HTMLFormElement>) => void; onMarkPaid: () => void; onEditProductChange: (value: string) => void; onEditItemsChange: React.Dispatch<React.SetStateAction<LineItem[]>>; onAddEditItem: (event: React.FormEvent<HTMLFormElement>) => void }) {
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const pending = Math.max(Number(selected.total) - Number(selected.montoPagado ?? 0), 0);
+  const commission = selected.vendedor ? Number(selected.total) * Number(selected.vendedor.porcentajeComision) / 100 : 0;
+  const isPaid = selected.pagoEstado === "PAGADA" || pending <= 0;
+  const itemCount = selected.items?.reduce((sum: number, item: any) => sum + Number(item.cantidad ?? 0), 0) ?? 0;
+  const paymentLabel = selected.metodoPago ? String(selected.metodoPago).replaceAll("_", " ") : "Sin método";
+  return <section className="panel detail-panel remito-detail">
+    <div className="detail-head remito-detail-head">
+      <div><h2>Boleta #{selected.numero}</h2><span>{selected.cliente?.nombre ?? "Cliente"} · {formatDate(selected.fecha)}</span></div>
+      <button type="button" className="icon-button" onClick={onClose} title="Cerrar detalle"><X size={18} /></button>
+    </div>
+    <div className={`remito-focus-card ${isPaid ? "paid" : "pending"}`}>
+      <div>
+        <span className="eyebrow">{isPaid ? "Cobro cerrado" : "Saldo a cobrar"}</span>
+        <strong>{isPaid ? money(selected.total) : money(pending)}</strong>
+        <small>{isPaid ? `Pagada ${paymentLabel !== "Sin método" ? `por ${paymentLabel.toLowerCase()}` : ""}` : `Pagado hasta ahora: ${money(selected.montoPagado ?? 0)}`}</small>
+      </div>
+      <div className="remito-focus-actions">
+        <span className={`status-chip ${String(selected.pagoEstado).toLowerCase()}`}>{selected.pagoEstado}</span>
+        <span className={`status-chip ${String(selected.estado).toLowerCase()}`}>{selected.estado}</span>
+        {canWrite && selected.estado === "ACTIVO" && !isPaid && <button type="button" onClick={onMarkPaid}>Registrar como pagada</button>}
+      </div>
+    </div>
+    <div className="remito-summary-list">
+      <div><span>Vendedor</span><strong>{selected.vendedor?.nombre ?? "Sin vendedor"}</strong></div>
+      <div><span>Método</span><strong>{paymentLabel}</strong></div>
+      <div><span>Productos</span><strong>{itemCount} u.</strong></div>
+      <div><span>Comisión</span><strong>{money(commission)}</strong></div>
+    </div>
+    <div className="remito-products">
+      <div className="section-title">
+        <h3>Productos vendidos</h3>
+        <span>Total {money(selected.total)}</span>
+      </div>
+      <div className="line-items">{(selected.items ?? []).map((item: any) => <div className="line-item" key={item.id ?? item.productoId}><div><strong>{item.nombreProducto}</strong><span>{item.codigoProducto} · cant. {item.cantidad} · unit. {money(item.precioUnitario)}</span></div><strong>{money(item.subtotal)}</strong></div>)}</div>
+    </div>
+    {canWrite && selected.estado === "ACTIVO" && <div className="client-edit-box">
+      <button type="button" className="secondary compact-toggle" onClick={() => setAdvancedOpen(!advancedOpen)}>{advancedOpen ? "Ocultar edición" : "Editar cobro o productos"}</button>
+      {advancedOpen && <form className="form remito-edit-form" onSubmit={onSaveEdit}>
+        <fieldset disabled={savingEdit}>
+        <div className="payment-grid">
+          <label className="field-card"><span>Vendedor</span><select name="vendedorId" defaultValue={selected.vendedorId ?? ""}><option value="">Sin vendedor</option>{activeVendors.map((v) => <option value={v.id} key={v.id}>{v.nombre} · {Number(v.porcentajeComision)}%</option>)}</select><small>Para calcular comisión.</small></label>
+          <label className="field-card"><span>Estado del pago</span><select name="pagoEstado" defaultValue={selected.pagoEstado}><option value="PENDIENTE">Pendiente</option><option value="PARCIAL">Parcial</option><option value="PAGADA">Pagada</option></select><small>Seguimiento de deuda.</small></label>
+          <label className="field-card"><span>Método</span><select name="metodoPago" defaultValue={selected.metodoPago ?? ""}><option value="">Sin método</option><option value="EFECTIVO">Efectivo</option><option value="TRANSFERENCIA">Transferencia</option><option value="TARJETA">Tarjeta</option><option value="CHEQUE">Cheque</option><option value="OTRO">Otro</option></select><small>Opcional.</small></label>
+          <label className="field-card"><span>Monto pagado</span><input name="montoPagado" type="number" step="0.01" min="0" defaultValue={Number(selected.montoPagado)} /><small>Total: {money(selected.total)}</small></label>
+          <label className="field-card"><span>Descuento</span><input name="descuentoPorcentaje" type="number" step="0.01" min="0" max="100" defaultValue={Number(selected.descuentoPorcentaje ?? 0)} /><small>Porcentaje.</small></label>
+        </div>
+        <ItemList items={editItems} mode="remito" priceList={selected.listaPrecios} onRemove={(id) => onEditItemsChange((current) => current.filter((item) => item.product.id !== id))} />
+        <div className="add-line"><ProductPicker products={products} name="productoId" form="edit-remito-product" value={editProductId} onChange={onEditProductChange} /><input name="cantidad" form="edit-remito-product" type="number" min="1" placeholder="Cantidad" required /><button type="submit" form="edit-remito-product">Agregar</button></div>
+        <Metric label="Nuevo subtotal" value={money(editItems.reduce((sum, item) => sum + item.cantidad * itemPrice(item.product, selected.listaPrecios), 0))} />
+        {editSaved && <p className="success">Cambios guardados correctamente.</p>}
+        <button disabled={savingEdit}>{savingEdit ? "Guardando cambios..." : "Guardar cambios"}</button>
+        </fieldset>
+      </form>}
+      <form id="edit-remito-product" onSubmit={onAddEditItem} />
+    </div>}
+  </section>;
 }
 
 function StockView({ api, isAdmin }: { api: ReturnType<typeof useApi>; isAdmin: boolean }) {
@@ -815,6 +907,62 @@ function StockMovement({ row }: { row: any }) {
   return <div className={`movement ${entrada ? "in" : "out"}`}><div><strong>{row.producto?.nombre ?? "Producto"}</strong><span>{date} · {label}</span></div><div className="movement-numbers"><strong>{entrada ? "Entró" : "Salió"} {Math.abs(row.cantidad)}</strong><span>Quedaron {row.stockResultante}</span></div><small>{row.motivo || referenceLabel(row.referenciaTipo)}</small></div>;
 }
 
+const expenseCategories = ["COMBUSTIBLE", "FLETE", "ALQUILER", "SUELDOS", "SERVICIOS", "MANTENIMIENTO", "INSUMOS", "IMPUESTOS", "OTRO"];
+
+function ExpensesView({ api, isAdmin }: { api: ReturnType<typeof useApi>; isAdmin: boolean }) {
+  const [rows, setRows] = useState<any[]>([]);
+  const [total, setTotal] = useState(0);
+  const [filters, setFilters] = useState({ q: "", categoria: "", fechaDesde: "", fechaHasta: "" });
+  const [error, setError] = useState("");
+  const load = (next = filters) => api(`/gastos?${qs({ ...next, pageSize: 100 })}`).then((data) => { setRows(data.items); setTotal(data.montoTotal ?? 0); });
+  useEffect(() => { load(); }, []);
+  async function create(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formEl = event.currentTarget;
+    const form = payload(formEl);
+    setError("");
+    try {
+      await api("/gastos", { method: "POST", body: JSON.stringify({ fecha: form.fecha, categoria: form.categoria, descripcion: form.descripcion, monto: Number(form.monto), metodoPago: form.metodoPago || null, comprobante: form.comprobante || null, observaciones: form.observaciones || null }) });
+      formEl.reset();
+      await load();
+    } catch (err: any) {
+      setError(err.message ?? "No se pudo registrar el gasto");
+    }
+  }
+  async function remove(row: any) {
+    if (!confirmAction(`¿Eliminar el gasto "${row.descripcion}"?`)) return;
+    await api(`/gastos/${row.id}`, { method: "DELETE" });
+    await load();
+  }
+  return <div className="grid two">
+    <section className="panel wide">
+      <div className="detail-head"><div><h2>Gastos</h2><span>Salidas de plata que no modifican stock, pero sí bajan la ganancia neta.</span></div><Metric label="Total filtrado" value={money(total)} /></div>
+      <form className="filters filters-wide" onSubmit={(e) => { e.preventDefault(); load(filters); }}>
+        <input value={filters.q} onChange={(e) => setFilters({ ...filters, q: e.target.value })} placeholder="Buscar gasto" />
+        <select value={filters.categoria} onChange={(e) => setFilters({ ...filters, categoria: e.target.value })}><option value="">Todas las categorías</option>{expenseCategories.map((category) => <option key={category} value={category}>{expenseLabel(category)}</option>)}</select>
+        <input type="date" value={filters.fechaDesde} onChange={(e) => setFilters({ ...filters, fechaDesde: e.target.value })} />
+        <input type="date" value={filters.fechaHasta} onChange={(e) => setFilters({ ...filters, fechaHasta: e.target.value })} />
+        <button>Filtrar</button><button type="button" className="secondary" onClick={() => { const clean = { q: "", categoria: "", fechaDesde: "", fechaHasta: "" }; setFilters(clean); load(clean); }}>Limpiar</button>
+      </form>
+      <div className="expense-list">{rows.map((row) => <div className="expense-row" key={row.id}><div><strong>{row.descripcion}</strong><span>{formatDate(row.fecha)} · {expenseLabel(row.categoria)} · {row.metodoPago ?? "Sin método"}</span><small>{row.comprobante || row.observaciones || row.usuario?.nombre}</small></div><strong>{money(row.monto)}</strong>{isAdmin && <button type="button" className="icon-button" onClick={() => remove(row)} title="Eliminar gasto"><Trash2 size={16} /></button>}</div>)}{!rows.length && <p className="muted">No hay gastos con estos filtros.</p>}</div>
+    </section>
+    <section className="panel">
+      <h2>Nuevo gasto</h2>
+      <form className="form" onSubmit={create}>
+        <input name="fecha" type="date" defaultValue={dateInput()} required />
+        <select name="categoria" defaultValue="COMBUSTIBLE">{expenseCategories.map((category) => <option key={category} value={category}>{expenseLabel(category)}</option>)}</select>
+        <input name="descripcion" placeholder="Descripción" required />
+        <input name="monto" type="number" step="0.01" min="0.01" placeholder="Monto" required />
+        <select name="metodoPago"><option value="">Sin método</option><option value="EFECTIVO">Efectivo</option><option value="TRANSFERENCIA">Transferencia</option><option value="TARJETA">Tarjeta</option><option value="CHEQUE">Cheque</option><option value="OTRO">Otro</option></select>
+        <input name="comprobante" placeholder="Comprobante o referencia" />
+        <textarea name="observaciones" placeholder="Observaciones" rows={3} />
+        {error && <p className="error">{error}</p>}
+        <button>Registrar gasto</button>
+      </form>
+    </section>
+  </div>;
+}
+
 function BalanceView({ api }: { api: ReturnType<typeof useApi> }) {
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
@@ -824,7 +972,7 @@ function BalanceView({ api }: { api: ReturnType<typeof useApi> }) {
   const load = () => Promise.all([api(`/dashboard/balance?year=${year}&month=${month}`), api("/dashboard")]).then(([balance, dash]) => { setData(balance); setDashboard(dash); });
   useEffect(() => { load(); }, []);
   if (!data || !dashboard) return <p>Cargando...</p>;
-  return <div className="grid two"><section className="panel wide"><div className="filters"><input type="number" value={year} onChange={(e) => setYear(Number(e.target.value))} /><select value={month} onChange={(e) => setMonth(Number(e.target.value))}>{Array.from({ length: 12 }, (_, i) => <option key={i + 1} value={i + 1}>{new Date(2026, i, 1).toLocaleString("es-AR", { month: "long" })}</option>)}</select><button onClick={load}>Ver período</button></div><div className="metrics"><Metric label="Ventas" value={money(data.ventas)} /><Metric label="Compras" value={money(data.compras)} /><Metric label="Resultado" value={money(data.resultado)} /><Metric label="Valor stock" value={money(data.valorStock)} /></div><h2>Comparativo últimos 6 meses</h2><ResponsiveContainer width="100%" height={320}><BarChart data={dashboard.chart}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="mes" /><YAxis /><Tooltip /><Legend /><Bar dataKey="ventas" fill="#d71920" /><Bar dataKey="compras" fill="#2563eb" /></BarChart></ResponsiveContainer></section></div>;
+  return <div className="grid two"><section className="panel wide"><div className="filters"><input type="number" value={year} onChange={(e) => setYear(Number(e.target.value))} /><select value={month} onChange={(e) => setMonth(Number(e.target.value))}>{Array.from({ length: 12 }, (_, i) => <option key={i + 1} value={i + 1}>{new Date(2026, i, 1).toLocaleString("es-AR", { month: "long" })}</option>)}</select><button onClick={load}>Ver período</button></div><div className="metrics"><Metric label="Ventas" value={money(data.ventas)} /><Metric label="Costo vendido" value={money(data.costoVendido)} /><Metric label="Ganancia bruta" value={money(data.gananciaBruta)} /><Metric label="Gastos" value={money(data.gastos)} /><Metric label="Ganancia neta" value={money(data.resultado)} /><Metric label="Compras de stock" value={money(data.compras)} /><Metric label="Valor stock" value={money(data.valorStock)} /></div><h2>Comparativo últimos 6 meses</h2><ResponsiveContainer width="100%" height={320}><BarChart data={dashboard.chart}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="mes" /><YAxis /><Tooltip /><Legend /><Bar dataKey="ventas" fill="#d71920" /><Bar dataKey="gananciaBruta" fill="#166534" /><Bar dataKey="gastos" fill="#2563eb" /></BarChart></ResponsiveContainer></section></div>;
 }
 
 function ReportsView({ api }: { api: ReturnType<typeof useApi> }) {
@@ -844,6 +992,7 @@ function ReportsView({ api }: { api: ReturnType<typeof useApi> }) {
     ["clientes", "Clientes con saldos"],
     ["ventas", "Ventas del período"],
     ["compras", "Compras del período"],
+    ["gastos", "Gastos del período"],
     ["productos", "Productos y stock"]
   ];
   return <div className="grid two">
@@ -858,17 +1007,23 @@ function ReportsView({ api }: { api: ReturnType<typeof useApi> }) {
   </div>;
 }
 
-function VendorsView({ api }: { api: ReturnType<typeof useApi> }) {
+function CommercialsView({ api, isAdmin, canWrite }: { api: ReturnType<typeof useApi>; isAdmin: boolean; canWrite: boolean }) {
   const [vendors, setVendors] = useState<Vendor[]>([]);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [tab, setTab] = useState<"vendors" | "suppliers">("vendors");
   const [selectedVendor, setSelectedVendor] = useState<Vendor | null>(null);
+  const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null);
   const [vendorModal, setVendorModal] = useState<"create" | "edit" | null>(null);
+  const [supplierModal, setSupplierModal] = useState<"create" | "edit" | null>(null);
   const [error, setError] = useState("");
   const loadVendors = () => api("/vendedores?pageSize=100").then((d) => setVendors(d.items));
-  useEffect(() => { loadVendors(); }, []);
+  const loadSuppliers = () => api("/proveedores?pageSize=100").then((d) => setSuppliers(d.items));
+  useEffect(() => { loadVendors(); loadSuppliers(); }, []);
   async function createVendor(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const formEl = event.currentTarget;
     const form = payload(formEl);
+    setError("");
     try {
       await api("/vendedores", { method: "POST", body: JSON.stringify({ nombre: form.nombre, porcentajeComision: Number(form.porcentajeComision) }) });
       formEl.reset();
@@ -882,6 +1037,7 @@ function VendorsView({ api }: { api: ReturnType<typeof useApi> }) {
     event.preventDefault();
     if (!selectedVendor) return;
     const form = payload(event.currentTarget);
+    setError("");
     try {
       await api(`/vendedores/${selectedVendor.id}`, { method: "PATCH", body: JSON.stringify({ nombre: form.nombre, porcentajeComision: Number(form.porcentajeComision), activo: form.activo === "true" }) });
       setSelectedVendor(null);
@@ -891,15 +1047,66 @@ function VendorsView({ api }: { api: ReturnType<typeof useApi> }) {
       setError(err.message ?? "No se pudo actualizar el vendedor");
     }
   }
+  async function createSupplier(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formEl = event.currentTarget;
+    const form = payload(formEl);
+    setError("");
+    try {
+      await api("/proveedores", { method: "POST", body: JSON.stringify(supplierPayload(form)) });
+      formEl.reset();
+      setSupplierModal(null);
+      await loadSuppliers();
+    } catch (err: any) {
+      setError(err.message ?? "No se pudo crear el proveedor");
+    }
+  }
+  async function updateSupplier(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedSupplier) return;
+    const form = payload(event.currentTarget);
+    setError("");
+    try {
+      await api(`/proveedores/${selectedSupplier.id}`, { method: "PATCH", body: JSON.stringify({ ...supplierPayload(form), activo: form.activo === "true" }) });
+      setSelectedSupplier(null);
+      setSupplierModal(null);
+      await loadSuppliers();
+    } catch (err: any) {
+      setError(err.message ?? "No se pudo actualizar el proveedor");
+    }
+  }
   const activeCount = vendors.filter((vendor) => vendor.activo).length;
+  const activeSuppliers = suppliers.filter((supplier) => supplier.activo).length;
   return <div className="client-page">
     <section className="panel vendor-panel wide">
-      <div className="detail-head"><div><h2>Vendedores</h2><span>{activeCount} activos · comisiones aplicadas en ventas.</span></div><button type="button" onClick={() => { setError(""); setSelectedVendor(null); setVendorModal("create"); }}>Nuevo vendedor</button></div>
-      <div className="vendor-list vendor-list-grid">{vendors.map((vendor) => <button type="button" className="vendor-card" key={vendor.id} onClick={() => { setError(""); setSelectedVendor(vendor); setVendorModal("edit"); }}><div><strong>{vendor.nombre}</strong><span>{vendor.activo ? "Activo" : "Inactivo"}</span></div><strong>{Number(vendor.porcentajeComision)}%</strong></button>)}{!vendors.length && <p className="muted">No hay vendedores cargados.</p>}</div>
+      <div className="detail-head"><div><h2>Comerciales</h2><span>Vendedores para comisiones y proveedores para compras.</span></div>{tab === "vendors" ? <button type="button" onClick={() => { setError(""); setSelectedVendor(null); setVendorModal("create"); }}>Nuevo vendedor</button> : canWrite && <button type="button" onClick={() => { setError(""); setSelectedSupplier(null); setSupplierModal("create"); }}>Nuevo proveedor</button>}</div>
+      <div className="tabs compact-tabs"><button type="button" className={tab === "vendors" ? "active" : ""} onClick={() => setTab("vendors")}>Vendedores</button><button type="button" className={tab === "suppliers" ? "active" : ""} onClick={() => setTab("suppliers")}>Proveedores</button></div>
+      {tab === "vendors" && <>
+        <div className="section-title"><h3>Vendedores</h3><span>{activeCount} activos · comisiones aplicadas en ventas.</span></div>
+        <div className="vendor-list vendor-list-grid">{vendors.map((vendor) => <button type="button" className="vendor-card" key={vendor.id} onClick={() => { setError(""); setSelectedVendor(vendor); setVendorModal("edit"); }}><div><strong>{vendor.nombre}</strong><span>{vendor.activo ? "Activo" : "Inactivo"}</span></div><strong>{Number(vendor.porcentajeComision)}%</strong></button>)}{!vendors.length && <p className="muted">No hay vendedores cargados.</p>}</div>
+      </>}
+      {tab === "suppliers" && <>
+        <div className="section-title"><h3>Proveedores</h3><span>{activeSuppliers} activos · disponibles al cargar compras.</span></div>
+        <div className="vendor-list supplier-list-grid">{suppliers.map((supplier) => <button type="button" className="vendor-card supplier-card" key={supplier.id} onClick={() => { if (!isAdmin) return; setError(""); setSelectedSupplier(supplier); setSupplierModal("edit"); }}><div><strong>{supplier.nombre}</strong><span>{supplier.contacto ?? "Sin contacto"} · {supplier.telefono ?? "sin teléfono"}</span><small>{supplier.email ?? supplier.cuit ?? (supplier.activo ? "Activo" : "Inactivo")}</small></div><span className={`status-chip ${supplier.activo ? "activo" : "cancelado"}`}>{supplier.activo ? "Activo" : "Inactivo"}</span></button>)}{!suppliers.length && <p className="muted">No hay proveedores cargados.</p>}</div>
+      </>}
     </section>
     {vendorModal === "create" && <VendorModal title="Nuevo vendedor" onClose={() => setVendorModal(null)} onSubmit={createVendor} error={error} />}
     {vendorModal === "edit" && selectedVendor && <VendorModal title="Editar vendedor" vendor={selectedVendor} onClose={() => { setVendorModal(null); setSelectedVendor(null); }} onSubmit={updateVendor} error={error} />}
+    {supplierModal === "create" && <SupplierModal title="Nuevo proveedor" onClose={() => setSupplierModal(null)} onSubmit={createSupplier} error={error} />}
+    {supplierModal === "edit" && selectedSupplier && <SupplierModal title="Editar proveedor" supplier={selectedSupplier} canEditStatus={isAdmin} onClose={() => { setSupplierModal(null); setSelectedSupplier(null); }} onSubmit={updateSupplier} error={error} />}
   </div>;
+}
+
+function supplierPayload(form: Record<string, FormDataEntryValue>) {
+  return {
+    nombre: form.nombre,
+    contacto: form.contacto || null,
+    telefono: form.telefono || null,
+    email: form.email || null,
+    cuit: form.cuit || null,
+    direccion: form.direccion || null,
+    observaciones: form.observaciones || null
+  };
 }
 
 function VendorModal({ title, vendor, onClose, onSubmit, error }: { title: string; vendor?: Vendor; onClose: () => void; onSubmit: (event: React.FormEvent<HTMLFormElement>) => void; error?: string }) {
@@ -915,6 +1122,32 @@ function VendorModal({ title, vendor, onClose, onSubmit, error }: { title: strin
         {vendor && <select name="activo" defaultValue={String(vendor.activo)}><option value="true">Activo</option><option value="false">Inactivo</option></select>}
         {error && <p className="error">{error}</p>}
         <div className="modal-actions"><button type="button" className="secondary" onClick={onClose}>Cancelar</button><button>{vendor ? "Guardar cambios" : "Crear vendedor"}</button></div>
+      </form>
+    </div>
+  </div>;
+}
+
+function SupplierModal({ title, supplier, canEditStatus = true, onClose, onSubmit, error }: { title: string; supplier?: Supplier; canEditStatus?: boolean; onClose: () => void; onSubmit: (event: React.FormEvent<HTMLFormElement>) => void; error?: string }) {
+  return <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label={title}>
+    <div className="form-modal supplier-modal">
+      <div className="selector-head">
+        <div><h3>{title}</h3><span>{supplier ? "Actualizá los datos del proveedor." : "Cargá los datos para usarlo en compras."}</span></div>
+        <button type="button" className="icon-button" onClick={onClose} title="Cerrar"><X size={18} /></button>
+      </div>
+      <form className="form" onSubmit={onSubmit}>
+        <div className="form-grid">
+          <input name="nombre" defaultValue={supplier?.nombre ?? ""} placeholder="Nombre del proveedor" required autoFocus />
+          <input name="contacto" defaultValue={supplier?.contacto ?? ""} placeholder="Persona de contacto" />
+          <input name="telefono" defaultValue={supplier?.telefono ?? ""} placeholder="Teléfono" />
+          <input name="email" type="email" defaultValue={supplier?.email ?? ""} placeholder="Email" />
+          <input name="cuit" defaultValue={supplier?.cuit ?? ""} placeholder="CUIT" />
+          <input name="direccion" defaultValue={supplier?.direccion ?? ""} placeholder="Dirección" />
+        </div>
+        <textarea name="observaciones" defaultValue={supplier?.observaciones ?? ""} placeholder="Observaciones" rows={3} />
+        {supplier && canEditStatus && <select name="activo" defaultValue={String(supplier.activo)}><option value="true">Activo</option><option value="false">Inactivo</option></select>}
+        {supplier && !canEditStatus && <input type="hidden" name="activo" value={String(supplier.activo)} />}
+        {error && <p className="error">{error}</p>}
+        <div className="modal-actions"><button type="button" className="secondary" onClick={onClose}>Cancelar</button><button>{supplier ? "Guardar cambios" : "Crear proveedor"}</button></div>
       </form>
     </div>
   </div>;
@@ -1025,6 +1258,11 @@ function ItemList({ items, mode, onRemove, priceList }: { items: LineItem[]; mod
 
 function movementLabel(type: string) {
   const labels: Record<string, string> = { COMPRA: "Compra cargada", REMITO: "Remito emitido", CANCELACION_REMITO: "Remito cancelado", ANULACION_COMPRA: "Compra anulada", AJUSTE_MANUAL: "Ajuste manual", ALTA_PRODUCTO: "Stock inicial", CAMBIO_COSTO: "Cambio de costo" };
+  return labels[type] ?? type;
+}
+
+function expenseLabel(type: string) {
+  const labels: Record<string, string> = { COMBUSTIBLE: "Combustible", FLETE: "Flete", ALQUILER: "Alquiler", SUELDOS: "Sueldos", SERVICIOS: "Servicios", MANTENIMIENTO: "Mantenimiento", INSUMOS: "Insumos", IMPUESTOS: "Impuestos", OTRO: "Otro" };
   return labels[type] ?? type;
 }
 

@@ -8,13 +8,22 @@ export const dashboardRouter = Router();
 dashboardRouter.use(requireAuth);
 
 async function metricsFor(start: Date, end: Date) {
-  const [ventas, compras] = await Promise.all([
+  const [ventas, compras, costoVendidoRows, gastos] = await Promise.all([
     prisma.remito.aggregate({ _sum: { total: true }, where: { estado: "ACTIVO", fecha: { gte: start, lte: end } } }),
-    prisma.compra.aggregate({ _sum: { total: true }, where: { estado: "ACTIVA", fecha: { gte: start, lte: end } } })
+    prisma.compra.aggregate({ _sum: { total: true }, where: { estado: "ACTIVA", fecha: { gte: start, lte: end } } }),
+    prisma.remitoItem.findMany({ where: { remito: { estado: "ACTIVO", fecha: { gte: start, lte: end } } }, select: { costoTotal: true } }),
+    prisma.gasto.aggregate({ _sum: { monto: true }, where: { fecha: { gte: start, lte: end } } })
   ]);
+  const ventasTotal = Number(ventas._sum.total ?? 0);
+  const costoVendido = costoVendidoRows.reduce((sum, item) => sum + Number(item.costoTotal), 0);
+  const gastosTotal = Number(gastos._sum.monto ?? 0);
   return {
-    ventas: Number(ventas._sum.total ?? 0),
-    compras: Number(compras._sum.total ?? 0)
+    ventas: ventasTotal,
+    compras: Number(compras._sum.total ?? 0),
+    costoVendido,
+    gananciaBruta: ventasTotal - costoVendido,
+    gastos: gastosTotal,
+    gananciaNeta: ventasTotal - costoVendido - gastosTotal
   };
 }
 
@@ -37,7 +46,10 @@ dashboardRouter.get("/", async (_req, res) => {
   res.json({
     ventasMes: month.ventas,
     comprasMes: month.compras,
-    balanceMes: month.ventas - month.compras,
+    costoVendidoMes: month.costoVendido,
+    gastosMes: month.gastos,
+    balanceMes: month.gananciaNeta,
+    gananciaBrutaMes: month.gananciaBruta,
     valorStock,
     stockBajo,
     ultimosRemitos,
@@ -52,5 +64,5 @@ dashboardRouter.get("/balance", requireRoles(Rol.ADMINISTRADOR, Rol.EMPLEADO), a
   const m = await metricsFor(startOfMonth(date), endOfMonth(date));
   const stock = await prisma.producto.findMany({ where: { activo: true }, select: { costo: true, stockActual: true } });
   const valorStock = stock.reduce((sum, p) => sum + Number(p.costo) * p.stockActual, 0);
-  res.json({ year, month, ventas: m.ventas, compras: m.compras, resultado: m.ventas - m.compras, valorStock });
+  res.json({ year, month, ventas: m.ventas, compras: m.compras, costoVendido: m.costoVendido, gananciaBruta: m.gananciaBruta, gastos: m.gastos, resultado: m.gananciaNeta, valorStock });
 });

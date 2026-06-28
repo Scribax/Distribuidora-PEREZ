@@ -17,12 +17,15 @@ purchasesRouter.get("/", async (req, res) => {
   const fechaDesde = req.query.fechaDesde ? new Date(String(req.query.fechaDesde)) : undefined;
   const fechaHasta = req.query.fechaHasta ? new Date(String(req.query.fechaHasta)) : undefined;
   const where: Prisma.CompraWhereInput = {
-    proveedorNombre: proveedor ? { contains: proveedor, mode: "insensitive" } : undefined,
+    OR: proveedor ? [
+      { proveedorNombre: { contains: proveedor, mode: "insensitive" } },
+      { proveedor: { nombre: { contains: proveedor, mode: "insensitive" } } }
+    ] : undefined,
     fecha: fechaDesde || fechaHasta ? { gte: fechaDesde, lte: fechaHasta } : undefined,
     items: productoId ? { some: { productoId } } : undefined
   };
   const [items, total] = await Promise.all([
-    prisma.compra.findMany({ where, skip, take, include: { items: true, usuario: { select: { nombre: true } } }, orderBy: { fecha: "desc" } }),
+    prisma.compra.findMany({ where, skip, take, include: { proveedor: true, items: true, usuario: { select: { nombre: true } } }, orderBy: { fecha: "desc" } }),
     prisma.compra.count({ where })
   ]);
   res.json({ items, total, page, pageSize });
@@ -32,7 +35,7 @@ purchasesRouter.get("/:id", async (req, res) => {
   const id = String(req.params.id);
   const compra = await prisma.compra.findUnique({
     where: { id },
-    include: { items: { include: { producto: true } }, usuario: { select: { nombre: true } } }
+    include: { proveedor: true, items: { include: { producto: true } }, usuario: { select: { nombre: true } } }
   });
   if (!compra) fail(404, "COMPRA_NO_ENCONTRADA", "Compra no encontrada");
   res.json(compra);
@@ -46,11 +49,14 @@ purchasesRouter.post("/", requireRoles(Rol.ADMINISTRADOR, Rol.EMPLEADO), async (
 
   const compra = await prisma.$transaction(async (tx) => {
     const productos = await ensureActiveProducts(tx, input.items.map((i) => i.productoId));
+    const proveedor = input.proveedorId ? await tx.proveedor.findUnique({ where: { id: input.proveedorId } }) : null;
+    if (input.proveedorId && !proveedor?.activo) fail(422, "PROVEEDOR_INACTIVO", "El proveedor debe existir y estar activo");
     const productMap = new Map(productos.map((p) => [p.id, p]));
     const total = input.items.reduce((sum, item) => sum + item.cantidad * item.costoUnitario, 0);
     const created = await tx.compra.create({
       data: {
-        proveedorNombre: input.proveedorNombre,
+        proveedorId: proveedor?.id ?? null,
+        proveedorNombre: proveedor?.nombre ?? input.proveedorNombre,
         fecha: input.fecha,
         total,
         usuarioId: req.user!.id,

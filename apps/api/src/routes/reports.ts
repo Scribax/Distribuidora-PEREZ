@@ -88,11 +88,13 @@ reportsRouter.get("/ventas", async (req, res) => {
   const { start, end } = period(req);
   const sales = await prisma.remito.findMany({
     where: { fecha: { gte: start, lte: end } },
-    include: { cliente: true, vendedor: true },
+    include: { cliente: true, vendedor: true, items: true },
     orderBy: { fecha: "desc" }
   });
   const rows = sales.map((sale) => {
     const comision = sale.vendedor ? money(sale.total) * Number(sale.vendedor.porcentajeComision) / 100 : 0;
+    const costoVendido = sale.items.reduce((sum, item) => sum + money(item.costoTotal), 0);
+    const ganancia = money(sale.total) - costoVendido;
     return {
       numero: sale.numero,
       fecha: sale.fecha.toISOString().slice(0, 10),
@@ -102,6 +104,8 @@ reportsRouter.get("/ventas", async (req, res) => {
       pagado: money(sale.montoPagado),
       pago: sale.pagoEstado,
       metodo: sale.metodoPago ?? "",
+      costoVendido: Number(costoVendido.toFixed(2)),
+      ganancia: Number(ganancia.toFixed(2)),
       comision: Number(comision.toFixed(2)),
       estado: sale.estado
     };
@@ -115,8 +119,34 @@ reportsRouter.get("/ventas", async (req, res) => {
     { header: "Pagado", key: "pagado", width: 14 },
     { header: "Pago", key: "pago", width: 14 },
     { header: "Método", key: "metodo", width: 16 },
+    { header: "Costo vendido", key: "costoVendido", width: 16 },
+    { header: "Ganancia", key: "ganancia", width: 16 },
     { header: "Comisión", key: "comision", width: 14 },
     { header: "Estado", key: "estado", width: 14 }
+  ], rows, format);
+});
+
+reportsRouter.get("/gastos", async (req, res) => {
+  const format = String(req.query.format ?? "pdf");
+  const { start, end } = period(req);
+  const expenses = await prisma.gasto.findMany({ where: { fecha: { gte: start, lte: end } }, include: { usuario: { select: { nombre: true } } }, orderBy: { fecha: "desc" } });
+  const rows = expenses.map((expense) => ({
+    fecha: expense.fecha.toISOString().slice(0, 10),
+    categoria: expense.categoria,
+    descripcion: expense.descripcion,
+    monto: money(expense.monto),
+    metodo: expense.metodoPago ?? "",
+    comprobante: expense.comprobante ?? "",
+    usuario: expense.usuario.nombre
+  }));
+  await sendReport(res, "gastos", "Gastos", [
+    { header: "Fecha", key: "fecha", width: 14 },
+    { header: "Categoría", key: "categoria", width: 18 },
+    { header: "Descripción", key: "descripcion", width: 34 },
+    { header: "Monto", key: "monto", width: 14 },
+    { header: "Método", key: "metodo", width: 16 },
+    { header: "Comprobante", key: "comprobante", width: 18 },
+    { header: "Usuario", key: "usuario", width: 18 }
   ], rows, format);
 });
 

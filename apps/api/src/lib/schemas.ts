@@ -55,6 +55,7 @@ export const clienteSchema = z.object({
 });
 
 export const compraSchema = z.object({
+  proveedorId: z.string().uuid().optional().nullable(),
   proveedorNombre: text(150),
   fecha: z.coerce.date(),
   items: z.array(z.object({
@@ -102,6 +103,27 @@ export const vendedorSchema = z.object({
   nombre: text(120),
   porcentajeComision: moneySchema.max(100).default(0),
   activo: z.boolean().optional()
+});
+
+export const proveedorSchema = z.object({
+  nombre: text(150),
+  contacto: optionalText(120),
+  telefono: optionalText(30),
+  email: z.string().email().max(150).optional().nullable().or(z.literal("").transform(() => null)),
+  cuit: optionalText(30),
+  direccion: optionalText(300),
+  observaciones: z.string().transform(cleanText).optional().nullable(),
+  activo: z.boolean().optional()
+});
+
+export const gastoSchema = z.object({
+  fecha: z.coerce.date().default(() => new Date()),
+  categoria: z.enum(["COMBUSTIBLE", "FLETE", "ALQUILER", "SUELDOS", "SERVICIOS", "MANTENIMIENTO", "INSUMOS", "IMPUESTOS", "OTRO"]).default("OTRO"),
+  descripcion: text(250),
+  monto: moneySchema,
+  metodoPago: z.enum(["EFECTIVO", "TRANSFERENCIA", "TARJETA", "CHEQUE", "OTRO"]).optional().nullable(),
+  comprobante: optionalText(120),
+  observaciones: z.string().transform(cleanText).optional().nullable()
 });
 
 export const aumentoPreciosSchema = z.object({

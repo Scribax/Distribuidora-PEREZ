@@ -13,6 +13,8 @@ import { remittancesRouter } from "./routes/remittances.js";
 import { dashboardRouter } from "./routes/dashboard.js";
 import { vendorsRouter } from "./routes/vendors.js";
 import { reportsRouter } from "./routes/reports.js";
+import { suppliersRouter } from "./routes/suppliers.js";
+import { expensesRouter } from "./routes/expenses.js";
 
 const app = express();
 app.use(helmet());
@@ -29,6 +31,8 @@ app.use("/api/compras", purchasesRouter);
 app.use("/api/remitos", remittancesRouter);
 app.use("/api/dashboard", dashboardRouter);
 app.use("/api/vendedores", vendorsRouter);
+app.use("/api/proveedores", suppliersRouter);
+app.use("/api/gastos", expensesRouter);
 app.use("/api/informes", reportsRouter);
 app.use(errorHandler);
 

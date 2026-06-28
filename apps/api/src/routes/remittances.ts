@@ -90,12 +90,15 @@ remittancesRouter.post("/", requireRoles(Rol.ADMINISTRADOR, Rol.EMPLEADO), async
     const items = input.items.map((item) => {
       const producto = productMap.get(item.productoId)!;
       const precio = Number(input.listaPrecios === "MAYORISTA" ? producto.precioMayorista : producto.precioMinorista);
+      const costo = Number(producto.costo);
       return {
         productoId: item.productoId,
         codigoProducto: producto.codigoInterno,
         nombreProducto: producto.nombre,
         cantidad: item.cantidad,
         precioUnitario: precio,
+        costoUnitario: costo,
+        costoTotal: costo * item.cantidad,
         subtotal: precio * item.cantidad
       };
     });
@@ -173,6 +176,7 @@ remittancesRouter.put("/:id", requireRoles(Rol.ADMINISTRADOR, Rol.EMPLEADO), asy
       const newItems = input.items.map((item) => {
         const producto = productMap.get(item.productoId)!;
         const precio = Number(remito.listaPrecios === "MAYORISTA" ? producto.precioMayorista : producto.precioMinorista);
+        const costo = Number(producto.costo);
         return {
           remitoId: remito.id,
           productoId: item.productoId,
@@ -180,6 +184,8 @@ remittancesRouter.put("/:id", requireRoles(Rol.ADMINISTRADOR, Rol.EMPLEADO), asy
           nombreProducto: producto.nombre,
           cantidad: item.cantidad,
           precioUnitario: precio,
+          costoUnitario: costo,
+          costoTotal: costo * item.cantidad,
           subtotal: precio * item.cantidad
         };
       });
@@ -277,25 +283,36 @@ remittancesRouter.get("/:id/pdf", async (req, res) => {
   doc.pipe(res);
   const money = (value: unknown) => `$${Number(value).toFixed(2)}`;
   const saldoPendienteBoleta = Math.max(Number(remito.saldoClienteAlEmitir), remitoDebt(Number(remito.total), Number(remito.montoPagado)));
+  const deudaBoleta = remitoDebt(Number(remito.total), Number(remito.montoPagado));
+  const discountAmount = Number(remito.subtotal) - Number(remito.total);
   const pageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
   const left = doc.page.margins.left;
   const right = left + pageWidth;
 
-  doc.image(brandLogoPath, left, 26, { width: 128 });
-  doc.fontSize(17).fillColor("#111111").text(`Boleta Nro. ${remito.numero}`, right - 190, 34, { width: 190, align: "right" });
-  doc.fontSize(9).fillColor("#555555").text(`Fecha: ${remito.fecha.toISOString().slice(0, 10)}`, right - 190, 58, { width: 190, align: "right" });
-  doc.text(`Estado: ${remito.estado === "ACTIVO" ? "Activo" : "Cancelado"}`, right - 190, 73, { width: 190, align: "right" });
-  doc.moveTo(left, 100).lineTo(right, 100).strokeColor("#166534").stroke();
+  doc.image(brandLogoPath, left, 22, { width: 118 });
+  doc.fontSize(17).fillColor("#111111").text(`Boleta Nro. ${remito.numero}`, right - 190, 29, { width: 190, align: "right" });
+  doc.fontSize(9).fillColor("#555555").text(`Fecha: ${remito.fecha.toISOString().slice(0, 10)}`, right - 190, 53, { width: 190, align: "right" });
+  doc.text(`Estado: ${remito.estado === "ACTIVO" ? "Activo" : "Cancelado"}`, right - 190, 67, { width: 190, align: "right" });
+  doc.moveTo(left, 91).lineTo(right, 91).strokeColor("#166534").lineWidth(1.2).stroke();
 
-  doc.fontSize(10).fillColor("#111111").text(`Cliente: ${remito.cliente.nombre}`, left, 116, { width: 270 });
-  doc.text(`Dirección: ${remito.cliente.direccion ?? "-"}`, left, 134, { width: 270 });
-  doc.text(`Vendedor: ${remito.vendedor?.nombre ?? "-"}`, left + 315, 116, { width: 180 });
-  doc.text(`Pago: ${remito.pagoEstado}`, left + 315, 134, { width: 180 });
-  doc.fillColor("#166534").fontSize(11).text(`Saldo pendiente con esta boleta: ${money(saldoPendienteBoleta)}`, left, 158, { width: 300 });
-  doc.fillColor("#111111").fontSize(9).text(`Abonado: ${money(remito.montoPagado)}${remito.metodoPago ? ` - ${remito.metodoPago}` : ""}`, left + 315, 160, { width: 210 });
+  doc.roundedRect(left, 106, pageWidth, 62, 4).strokeColor("#d9e2dd").lineWidth(0.8).stroke();
+  doc.fontSize(9.5).fillColor("#111111").text("Cliente", left + 10, 117, { width: 80 });
+  doc.fontSize(10.5).text(remito.cliente.nombre, left + 70, 116, { width: 210 });
+  doc.fontSize(9.5).fillColor("#555555").text(`Dirección: ${remito.cliente.direccion ?? "-"}`, left + 70, 134, { width: 210 });
+  doc.fillColor("#111111").text("Vendedor", left + 310, 117, { width: 70 });
+  doc.fontSize(10.5).text(remito.vendedor?.nombre ?? "-", left + 382, 116, { width: 130 });
+  doc.fontSize(9.5).fillColor("#555555").text(`Pago: ${remito.pagoEstado}${remito.metodoPago ? ` · ${remito.metodoPago}` : ""}`, left + 382, 134, { width: 140 });
+
+  doc.roundedRect(left, 178, pageWidth, 44, 4).fillAndStroke("#f7fbf8", "#d9e2dd");
+  doc.fillColor("#166534").fontSize(8).text("SALDO TOTAL DEL CLIENTE", left + 10, 188, { width: 165 });
+  doc.fontSize(12).text(money(saldoPendienteBoleta), left + 10, 200, { width: 165 });
+  doc.fillColor("#555555").fontSize(8).text("ABONADO EN ESTA BOLETA", left + 205, 188, { width: 150 });
+  doc.fillColor("#111111").fontSize(11).text(money(remito.montoPagado), left + 205, 200, { width: 150 });
+  doc.fillColor(deudaBoleta > 0 ? "#991b1b" : "#166534").fontSize(8).text(deudaBoleta > 0 ? "PENDIENTE DE ESTA BOLETA" : "BOLETA SALDADA", left + 390, 188, { width: 135, align: "right" });
+  doc.fontSize(12).text(money(deudaBoleta), left + 390, 200, { width: 135, align: "right" });
 
   const startX = left;
-  let y = 192;
+  let y = 244;
   doc.fontSize(8.5).fillColor("#496054");
   doc.text("Código", startX, y, { width: 64 });
   doc.text("Producto", startX + 72, y, { width: 220 });
@@ -306,7 +323,7 @@ remittancesRouter.get("/:id/pdf", async (req, res) => {
   doc.moveTo(startX, y - 4).lineTo(startX + pageWidth, y - 4).strokeColor("#d9e2dd").stroke();
   doc.fillColor("#111111").fontSize(8.5);
   for (const item of remito.items) {
-    if (y > 310) {
+    if (y > 326) {
       doc.fillColor("#777777").fontSize(8).text("Continúa en la siguiente boleta.", startX, y + 4, { width: pageWidth });
       break;
     }
@@ -319,11 +336,11 @@ remittancesRouter.get("/:id/pdf", async (req, res) => {
     y += 18;
   }
   doc.moveTo(startX, y).lineTo(startX + pageWidth, y).strokeColor("#d9e2dd").stroke();
-  const discountAmount = Number(remito.subtotal) - Number(remito.total);
-  const totalsY = Math.min(y + 12, 326);
-  doc.fontSize(9).fillColor("#111111").text(`Subtotal: ${money(remito.subtotal)}`, right - 185, totalsY, { width: 185, align: "right" });
-  doc.text(`Descuento ${Number(remito.descuentoPorcentaje)}%: -${money(discountAmount)}`, right - 185, totalsY + 16, { width: 185, align: "right" });
-  doc.fontSize(15).fillColor("#166534").text(`Total: ${money(remito.total)}`, right - 185, totalsY + 35, { width: 185, align: "right" });
+  const totalsY = Math.min(y + 10, 334);
+  doc.roundedRect(right - 206, totalsY, 206, 62, 4).strokeColor("#d9e2dd").lineWidth(0.8).stroke();
+  doc.fontSize(9).fillColor("#111111").text(`Subtotal: ${money(remito.subtotal)}`, right - 195, totalsY + 9, { width: 184, align: "right" });
+  doc.text(`Descuento ${Number(remito.descuentoPorcentaje)}%: -${money(discountAmount)}`, right - 195, totalsY + 25, { width: 184, align: "right" });
+  doc.fontSize(15).fillColor("#166534").text(`Total: ${money(remito.total)}`, right - 195, totalsY + 42, { width: 184, align: "right" });
   doc.moveTo(left, 404).lineTo(right, 404).dash(3, { space: 4 }).strokeColor("#b9c7bf").stroke().undash();
   doc.fillColor("#777777").fontSize(7).text("Documento interno sin validez fiscal.", left, 382, { align: "center", width: pageWidth, lineBreak: false });
   doc.end();
