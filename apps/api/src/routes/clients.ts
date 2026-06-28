@@ -30,7 +30,7 @@ clientsRouter.get("/:id", async (req, res) => {
   const id = String(req.params.id);
   const cliente = await prisma.cliente.findUnique({
     where: { id },
-    include: { remitos: { orderBy: { fecha: "desc" }, take: 50, include: { items: true } } }
+    include: { remitos: { orderBy: { fecha: "desc" }, take: 50, include: { items: true, vendedor: true } } }
   });
   if (!cliente) fail(404, "CLIENTE_NO_ENCONTRADO", "Cliente no encontrado");
   res.json(cliente);

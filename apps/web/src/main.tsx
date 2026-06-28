@@ -119,6 +119,7 @@ function App() {
     ["remitos", ReceiptText, "Ventas"],
     ...(session.user.rol === "CONSULTA" ? [] : [["balance", Calculator, "Balance"] as const]),
     ...(session.user.rol === "CONSULTA" ? [] : [["informes", BarChart3, "Informes"] as const]),
+    ...(session.user.rol === "CONSULTA" ? [] : [["vendedores", UserCog, "Vendedores"] as const]),
     ["stock", PackagePlus, "Stock"],
     ...(session.user.rol === "ADMINISTRADOR" ? [["usuarios", UserCog, "Usuarios"] as const] : [])
   ] as const;
@@ -137,6 +138,7 @@ function App() {
       {view === "remitos" && <RemittancesView api={api} canWrite={session.user.rol !== "CONSULTA"} />}
       {view === "balance" && <BalanceView api={api} />}
       {view === "informes" && <ReportsView api={api} />}
+      {view === "vendedores" && <VendorsView api={api} />}
       {view === "stock" && <StockView api={api} isAdmin={session.user.rol === "ADMINISTRADOR"} />}
       {view === "usuarios" && <UsersView api={api} />}
     </section>
@@ -361,13 +363,32 @@ function ClientsView({ api, canWrite, canEditBalance }: { api: ReturnType<typeof
       setError(err.message ?? "No se pudo actualizar el cliente");
     }
   }
+  async function openClientRemitoPdf(remito: any) {
+    setError("");
+    try {
+      const blob = await api(`/remitos/${remito.id}/pdf`, { headers: { Accept: "application/pdf" } });
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank", "noopener,noreferrer");
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (err: any) {
+      setError(err.message ?? "No se pudo abrir el PDF");
+    }
+  }
   const clientRows = clients.map((client) => ({ ...client, saldoFmt: money(client.saldoPendiente), estadoFmt: client.activo ? "Activo" : "Inactivo" }));
+  const totalSaldo = clients.reduce((sum, client) => sum + Number(client.saldoPendiente), 0);
+  const activeCount = clients.filter((client) => client.activo).length;
   return <div className="client-page">
-    <section className="panel wide">
-      <SearchBox q={q} setQ={setQ} onSearch={(e) => { e?.preventDefault(); load(q); }} onClear={() => { setQ(""); load(""); }} placeholder="Buscar por nombre, empresa o email" />
-      <Table rows={clientRows} cols={[["nombre", "Nombre"], ["empresa", "Empresa"], ["telefono", "Teléfono"], ["saldoFmt", "Saldo"], ["estadoFmt", "Estado"]]} onRowClick={openClient} />
+    <section className="client-overview">
+      <Metric label="Clientes" value={String(clients.length)} />
+      <Metric label="Activos" value={String(activeCount)} />
+      <Metric label="Saldo total" value={money(totalSaldo)} />
     </section>
-    {selectedClient && <ClientDetail client={selectedClient} canWrite={canWrite} canEditBalance={canEditBalance} onUpdate={updateClient} onClose={() => setSelectedClient(null)} />}
+    <section className="panel wide client-list-panel">
+      <div className="detail-head"><div><h2>Clientes</h2><span>Seleccioná un cliente para ver saldo, datos y boletas pendientes.</span></div></div>
+      <SearchBox q={q} setQ={setQ} onSearch={(e) => { e?.preventDefault(); load(q); }} onClear={() => { setQ(""); load(""); }} placeholder="Buscar por nombre, empresa o email" />
+      <div className="client-list">{clientRows.map((client) => <button type="button" className={`client-card ${selectedClient?.id === client.id ? "active" : ""}`} key={client.id} onClick={() => openClient(client)}><div><strong>{client.nombre}</strong><span>{client.empresa || "Consumidor final"}</span></div><div><span>Saldo</span><strong>{client.saldoFmt}</strong></div><small>{client.estadoFmt}</small></button>)}{!clientRows.length && <p className="muted">No hay clientes con esa búsqueda.</p>}</div>
+    </section>
+    {selectedClient && <ClientDetail client={selectedClient} canWrite={canWrite} canEditBalance={canEditBalance} onUpdate={updateClient} onClose={() => setSelectedClient(null)} onPdf={openClientRemitoPdf} />}
     {canWrite && <section className="panel"><h2>Nuevo cliente</h2><form className="form client-form" onSubmit={create}><ClientFields />{error && <p className="error">{error}</p>}<button>Crear cliente</button></form></section>}
   </div>;
 }
@@ -395,23 +416,42 @@ function ClientFields({ client }: { client?: Client }) {
   </>;
 }
 
-function ClientDetail({ client, canWrite, canEditBalance, onUpdate, onClose }: { client: Client; canWrite: boolean; canEditBalance: boolean; onUpdate: (event: React.FormEvent<HTMLFormElement>) => void; onClose: () => void }) {
+function ClientDetail({ client, canWrite, canEditBalance, onUpdate, onClose, onPdf }: { client: Client; canWrite: boolean; canEditBalance: boolean; onUpdate: (event: React.FormEvent<HTMLFormElement>) => void; onClose: () => void; onPdf: (row: any) => void }) {
+  const [editing, setEditing] = useState(false);
   const remitos = client.remitos ?? [];
   const activeRemitos = remitos.filter((r) => r.estado === "ACTIVO");
   const totalRemitos = activeRemitos.reduce((sum, r) => sum + Number(r.total), 0);
   const lastRemito = remitos[0];
-  const remitoRows = remitos.map(formatRemitoRow);
+  const remitoRows = [...remitos].sort((a, b) => {
+    const debtA = Math.max(Number(a.total) - Number(a.montoPagado ?? 0), 0);
+    const debtB = Math.max(Number(b.total) - Number(b.montoPagado ?? 0), 0);
+    if (debtA !== debtB) return debtB - debtA;
+    return Number(b.numero) - Number(a.numero);
+  }).map(formatRemitoRow);
+  const pendingRemitos = activeRemitos.filter((r) => Math.max(Number(r.total) - Number(r.montoPagado ?? 0), 0) > 0);
   return <section className="panel detail-panel client-profile">
     <div className="client-hero"><div><h2>{client.nombre}</h2><span>{client.empresa ?? "Sin empresa registrada"}</span></div><button type="button" className="icon-button" onClick={onClose} title="Cerrar detalle"><X size={18} /></button></div>
     <div className="detail-grid">
-      <Metric label="Saldo pendiente" value={money(client.saldoPendiente)} /><Metric label="Boletas activas" value={String(activeRemitos.length)} /><Metric label="Total vendido" value={money(totalRemitos)} /><Metric label="Última boleta" value={lastRemito ? `#${lastRemito.numero}` : "-"} />
+      <Metric label="Saldo pendiente" value={money(client.saldoPendiente)} /><Metric label="Boletas con deuda" value={String(pendingRemitos.length)} /><Metric label="Total vendido" value={money(totalRemitos)} /><Metric label="Última boleta" value={lastRemito ? `#${lastRemito.numero}` : "-"} />
     </div>
     <div className="client-info-grid">
       <InfoItem label="Estado" value={client.activo ? "Activo" : "Inactivo"} /><InfoItem label="Teléfono" value={client.telefono || "-"} /><InfoItem label="Email" value={client.email || "-"} /><InfoItem label="Dirección" value={client.direccion || "-"} />
     </div>
-    {canWrite && <form className="form" onSubmit={onUpdate}><h3>Editar cliente</h3><ClientFields client={client} />{canEditBalance && <input name="saldoPendiente" type="number" step="0.01" min="0" defaultValue={Number(client.saldoPendiente)} placeholder="Saldo pendiente" />} {canEditBalance && <select name="activo" defaultValue={String(client.activo)}><option value="true">Activo</option><option value="false">Inactivo</option></select>}<button>Guardar cliente</button></form>}
-    <div><h3>Historial de boletas</h3><Table rows={remitoRows} cols={[["numero", "Nro"], ["fechaCorta", "Fecha"], ["totalFmt", "Total"], ["pagoEstado", "Pago"], ["estado", "Estado"], ["itemsCount", "Ítems"]]} /></div>
+    <div className="client-remittances"><h3>Boletas del cliente</h3><span>Primero aparecen las que tienen saldo pendiente.</span><div className="client-remito-list">{remitoRows.map((row) => <ClientRemitoCard row={row} key={row.id} onPdf={onPdf} />)}{!remitoRows.length && <p className="muted">Este cliente todavía no tiene boletas.</p>}</div></div>
+    {canWrite && <div className="client-edit-box"><button type="button" className="secondary" onClick={() => setEditing(!editing)}>{editing ? "Ocultar edición" : "Editar datos del cliente"}</button>{editing && <form className="form" onSubmit={onUpdate}><h3>Editar cliente</h3><ClientFields client={client} />{canEditBalance && <input name="saldoPendiente" type="number" step="0.01" min="0" defaultValue={Number(client.saldoPendiente)} placeholder="Saldo pendiente" />} {canEditBalance && <select name="activo" defaultValue={String(client.activo)}><option value="true">Activo</option><option value="false">Inactivo</option></select>}<button>Guardar cliente</button></form>}</div>}
   </section>;
+}
+
+function ClientRemitoCard({ row, onPdf }: { row: any; onPdf: (row: any) => void }) {
+  const [open, setOpen] = useState(false);
+  const pending = Math.max(Number(row.total) - Number(row.montoPagado ?? 0), 0);
+  return <article className={`client-remito-card ${pending > 0 ? "pending" : ""}`}>
+    <div><strong>Boleta #{row.numero}</strong><span>{row.fechaCorta} · {row.itemsCount} ítem{row.itemsCount === 1 ? "" : "s"}</span></div>
+    <div className="sale-badges"><span className={`status-chip ${String(row.pagoEstado).toLowerCase()}`}>{row.pagoEstado}</span><span className={`status-chip ${String(row.estado).toLowerCase()}`}>{row.estado}</span></div>
+    <div><strong>{row.totalFmt}</strong><span>Pagado {row.pagadoFmt} · pendiente {money(pending)}</span></div>
+    <div className="client-remito-actions"><button type="button" className="secondary" onClick={() => setOpen(!open)}>{open ? "Ocultar" : "Ver detalle"}</button><button type="button" className="secondary" onClick={() => onPdf(row)}>PDF</button></div>
+    {open && <div className="client-remito-detail"><div><strong>Vendedor</strong><span>{row.vendedor?.nombre ?? "Sin vendedor"}</span></div><div><strong>Productos</strong><span>{(row.items ?? []).map((item: any) => `${item.cantidad} x ${item.nombreProducto}`).join(" · ") || "-"}</span></div></div>}
+  </article>;
 }
 
 function InfoItem({ label, value }: { label: string; value: string }) {
@@ -423,6 +463,7 @@ function PurchasesView({ api, canWrite, isAdmin }: { api: ReturnType<typeof useA
   const [products, setProducts] = useState<Product[]>([]);
   const [selected, setSelected] = useState<any | null>(null);
   const [purchaseItems, setPurchaseItems] = useState<LineItem[]>([]);
+  const [supplierName, setSupplierName] = useState("");
   const [filters, setFilters] = useState({ proveedor: "", productoId: "", fechaDesde: "", fechaHasta: "" });
   const [error, setError] = useState("");
   const load = (next = filters) => Promise.all([
@@ -462,12 +503,14 @@ function PurchasesView({ api, canWrite, isAdmin }: { api: ReturnType<typeof useA
     try {
       await api("/compras", { method: "POST", body: JSON.stringify({ proveedorNombre: form.proveedorNombre, fecha: form.fecha, items: purchaseItems.map((item) => ({ productoId: item.product.id, cantidad: item.cantidad, costoUnitario: item.costoUnitario ?? 0, actualizarCosto: item.actualizarCosto ?? true })) }) });
       formEl.reset();
+      setSupplierName("");
       setPurchaseItems([]);
       await load();
     } catch (err: any) {
       setError(err.message ?? "No se pudo registrar la compra");
     }
   }
+  const suppliers = Array.from(new Set(items.map((item) => String(item.proveedorNombre ?? "").trim()).filter(Boolean))).map((nombre) => ({ id: nombre, nombre }));
   const total = purchaseItems.reduce((sum, item) => sum + item.cantidad * (item.costoUnitario ?? 0), 0);
   const rows = items.map(formatPurchaseRow);
   return <div className="purchase-page">
@@ -482,7 +525,7 @@ function PurchasesView({ api, canWrite, isAdmin }: { api: ReturnType<typeof useA
         <div className="step-block">
           <span className="step-badge">1</span>
           <form id="new-purchase" className="form-grid" onSubmit={create}>
-            <input name="proveedorNombre" placeholder="Proveedor" required />
+            <SupplierPicker suppliers={suppliers} value={supplierName} onChange={setSupplierName} />
             <input name="fecha" type="date" defaultValue={dateInput()} required />
           </form>
         </div>
@@ -519,6 +562,15 @@ function PurchaseDetail({ purchase, onClose }: { purchase: any; onClose: () => v
   return <div className="detail-panel"><div className="detail-head"><div><h2>{purchase.proveedorNombre}</h2><span>{formatDate(purchase.fecha)} · {purchase.estado}</span></div><button type="button" className="icon-button" onClick={onClose} title="Cerrar detalle"><X size={18} /></button></div><Metric label="Total compra" value={money(purchase.total)} /><Table rows={rows} cols={[["productoNombre", "Producto"], ["cantidad", "Cantidad"], ["costoFmt", "Costo"], ["subtotalFmt", "Subtotal"], ["actualizarFmt", "Actualizó costo"]]} /></div>;
 }
 
+function SupplierPicker({ suppliers, value, onChange }: { suppliers: { id: string; nombre: string }[]; value: string; onChange: (value: string) => void }) {
+  const selected = suppliers.find((supplier) => supplier.nombre === value);
+  return <div className="supplier-picker">
+    <input type="hidden" name="proveedorNombre" value={value} required />
+    <EntityPicker items={suppliers} value={selected?.id ?? ""} onChange={(id) => onChange(suppliers.find((supplier) => supplier.id === id)?.nombre ?? "")} title="Elegir proveedor" placeholder="Elegir proveedor existente" searchPlaceholder="Buscar proveedor" getLabel={(supplier) => supplier.nombre} getMeta={() => "Proveedor usado en compras anteriores"} />
+    <input value={value} onChange={(event) => onChange(event.target.value)} placeholder="O escribir proveedor nuevo" required />
+  </div>;
+}
+
 function RemittancesView({ api, canWrite }: { api: ReturnType<typeof useApi>; canWrite: boolean }) {
   const [remitos, setRemitos] = useState<any[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -529,6 +581,10 @@ function RemittancesView({ api, canWrite }: { api: ReturnType<typeof useApi>; ca
   const [editItems, setEditItems] = useState<LineItem[]>([]);
   const [priceList, setPriceList] = useState<"MAYORISTA" | "MINORISTA">("MAYORISTA");
   const [descuentoPorcentaje, setDescuentoPorcentaje] = useState(0);
+  const [selectedClientId, setSelectedClientId] = useState("");
+  const [selectedVendorId, setSelectedVendorId] = useState("");
+  const [builderProductId, setBuilderProductId] = useState("");
+  const [editProductId, setEditProductId] = useState("");
   const [filters, setFilters] = useState({ numero: "", clienteId: "", vendedorId: "", estado: "", pagoEstado: "", fechaDesde: "", fechaHasta: "" });
   const [error, setError] = useState("");
   const load = (next = filters) => Promise.all([
@@ -547,12 +603,14 @@ function RemittancesView({ api, canWrite }: { api: ReturnType<typeof useApi>; ca
     event.preventDefault();
     const form = payload(event.currentTarget);
     addLine(products, form, setRemitoItems);
+    setBuilderProductId("");
     event.currentTarget.reset();
   }
   function addEditItem(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = payload(event.currentTarget);
     addLine(products, form, setEditItems);
+    setEditProductId("");
     event.currentTarget.reset();
   }
   async function openPdf(remito: any) {
@@ -622,6 +680,8 @@ function RemittancesView({ api, canWrite }: { api: ReturnType<typeof useApi>; ca
       formEl.reset();
       setRemitoItems([]);
       setDescuentoPorcentaje(0);
+      setSelectedClientId("");
+      setSelectedVendorId("");
       await load();
     } catch (err: any) {
       setError(err.message ?? "No se pudo crear la boleta");
@@ -632,29 +692,45 @@ function RemittancesView({ api, canWrite }: { api: ReturnType<typeof useApi>; ca
   const subtotal = remitoItems.reduce((sum, item) => sum + item.cantidad * itemPrice(item.product, priceList), 0);
   const total = subtotal * (1 - Math.min(Math.max(descuentoPorcentaje, 0), 100) / 100);
   const remitoRows = remitos.map(formatRemitoRow);
+  const totals = remitos.reduce((acc, remito) => {
+    if (remito.estado === "ACTIVO") {
+      acc.total += Number(remito.total);
+      acc.paid += Number(remito.montoPagado ?? 0);
+      if (remito.pagoEstado !== "PAGADA") acc.pending += Number(remito.total) - Number(remito.montoPagado ?? 0);
+    }
+    return acc;
+  }, { total: 0, paid: 0, pending: 0 });
   return <div className="remitos-layout">
-    <section className="panel">
-      <h2>Boletas emitidas</h2>
-      <form className="filters filters-wide" onSubmit={(e) => { e.preventDefault(); load(filters); }}>
-        <input value={filters.numero} onChange={(e) => setFilters({ ...filters, numero: e.target.value })} placeholder="Nro" />
-        <select value={filters.clienteId} onChange={(e) => setFilters({ ...filters, clienteId: e.target.value })}><option value="">Todos los clientes</option>{clients.map((c) => <option value={c.id} key={c.id}>{c.nombre}</option>)}</select>
-        <select value={filters.vendedorId} onChange={(e) => setFilters({ ...filters, vendedorId: e.target.value })}><option value="">Todos los vendedores</option>{vendors.map((v) => <option value={v.id} key={v.id}>{v.nombre}</option>)}</select>
-        <select value={filters.estado} onChange={(e) => setFilters({ ...filters, estado: e.target.value })}><option value="">Todos</option><option value="ACTIVO">Activos</option><option value="CANCELADO">Cancelados</option></select>
-        <select value={filters.pagoEstado} onChange={(e) => setFilters({ ...filters, pagoEstado: e.target.value })}><option value="">Todos los pagos</option><option value="PENDIENTE">Pendiente</option><option value="PARCIAL">Parcial</option><option value="PAGADA">Pagada</option></select>
-        <input type="date" value={filters.fechaDesde} onChange={(e) => setFilters({ ...filters, fechaDesde: e.target.value })} />
-        <input type="date" value={filters.fechaHasta} onChange={(e) => setFilters({ ...filters, fechaHasta: e.target.value })} />
-        <button>Filtrar</button>
-      </form>
-      <Table rows={remitoRows} cols={[["numero", "Nro"], ["cliente.nombre", "Cliente"], ["vendedor.nombre", "Vendedor"], ["fechaCorta", "Fecha"], ["totalFmt", "Total"], ["pagadoFmt", "Pagado"], ["pagoEstado", "Pago"], ["estado", "Estado"]]} onRowClick={openRemito} actions={(row) => <div className="table-actions"><button type="button" className="secondary" onClick={() => openPdf(row)}>PDF</button>{canWrite && row.estado === "ACTIVO" && <button type="button" className="secondary" onClick={() => cancelRemito(row)}>Cancelar</button>}</div>} />
+    <section className="sales-board">
+      <div className="sales-summary">
+        <Metric label="Boletas listadas" value={String(remitos.length)} />
+        <Metric label="Total activo" value={money(totals.total)} />
+        <Metric label="Cobrado" value={money(totals.paid)} />
+        <Metric label="Pendiente" value={money(Math.max(totals.pending, 0))} />
+      </div>
+      <section className="panel sales-list-panel">
+        <div className="detail-head sales-head"><div><h2>Boletas emitidas</h2><span>Buscá, revisá estado y abrí el detalle sin pelearte con una tabla enorme.</span></div>{canWrite && <button type="button" onClick={() => document.getElementById("crear-boleta")?.scrollIntoView({ behavior: "smooth", block: "start" })}>Crear boleta</button>}</div>
+        <form className="filters sales-filters" onSubmit={(e) => { e.preventDefault(); load(filters); }}>
+          <input value={filters.numero} onChange={(e) => setFilters({ ...filters, numero: e.target.value })} placeholder="Nro" />
+          <EntityPicker items={clients} value={filters.clienteId} onChange={(value) => setFilters({ ...filters, clienteId: value })} title="Elegir cliente" placeholder="Todos los clientes" searchPlaceholder="Buscar cliente" getLabel={(client) => client.nombre} getMeta={(client) => `${client.direccion ?? "Sin dirección"} · saldo ${money(client.saldoPendiente)}`} />
+          <EntityPicker items={vendors} value={filters.vendedorId} onChange={(value) => setFilters({ ...filters, vendedorId: value })} title="Elegir vendedor" placeholder="Todos los vendedores" searchPlaceholder="Buscar vendedor" getLabel={(vendor) => vendor.nombre} getMeta={(vendor) => `${Number(vendor.porcentajeComision)}% comisión`} />
+          <select value={filters.estado} onChange={(e) => setFilters({ ...filters, estado: e.target.value })}><option value="">Todos los estados</option><option value="ACTIVO">Activos</option><option value="CANCELADO">Cancelados</option></select>
+          <select value={filters.pagoEstado} onChange={(e) => setFilters({ ...filters, pagoEstado: e.target.value })}><option value="">Todos los pagos</option><option value="PENDIENTE">Pendiente</option><option value="PARCIAL">Parcial</option><option value="PAGADA">Pagada</option></select>
+          <input type="date" value={filters.fechaDesde} onChange={(e) => setFilters({ ...filters, fechaDesde: e.target.value })} />
+          <input type="date" value={filters.fechaHasta} onChange={(e) => setFilters({ ...filters, fechaHasta: e.target.value })} />
+          <button>Filtrar</button>
+        </form>
+        <div className="sales-list">{remitoRows.map((row) => <SaleCard key={row.id} row={row} onOpen={openRemito} onPdf={openPdf} onCancel={canWrite && row.estado === "ACTIVO" ? cancelRemito : undefined} />)}{!remitoRows.length && <p className="muted">No hay boletas con estos filtros.</p>}</div>
+      </section>
     </section>
-    {selected && <section className="panel detail-panel"><div className="detail-head"><div><h2>Boleta #{selected.numero}</h2><span>{selected.cliente?.nombre} · {selected.estado}</span></div><button type="button" className="icon-button" onClick={() => setSelected(null)} title="Cerrar detalle"><X size={18} /></button></div><div className="detail-grid"><Metric label="Fecha" value={formatDate(selected.fecha)} /><Metric label="Subtotal" value={money(selected.subtotal ?? selected.total)} /><Metric label="Descuento" value={`${Number(selected.descuentoPorcentaje ?? 0)}%`} /><Metric label="Total" value={money(selected.total)} /><Metric label="Pagado" value={money(selected.montoPagado)} /><Metric label="Pago" value={selected.pagoEstado} /><Metric label="Vendedor" value={selected.vendedor?.nombre ?? "-"} /><Metric label="Comisión" value={money(selected.vendedor ? Number(selected.total) * Number(selected.vendedor.porcentajeComision) / 100 : 0)} /></div><Table rows={(selected.items ?? []).map(formatRemitoItemRow)} cols={[["codigoProducto", "Código"], ["nombreProducto", "Producto"], ["cantidad", "Cantidad"], ["precioFmt", "Unitario"], ["subtotalFmt", "Subtotal"]]} />{canWrite && selected.estado === "ACTIVO" && <form className="form" onSubmit={saveEdit}><h3>Editar boleta</h3><div className="form-grid"><select name="vendedorId" defaultValue={selected.vendedorId ?? ""}><option value="">Sin vendedor</option>{activeVendors.map((v) => <option value={v.id} key={v.id}>{v.nombre} · {Number(v.porcentajeComision)}%</option>)}</select><select name="pagoEstado" defaultValue={selected.pagoEstado}><option value="PENDIENTE">Pendiente</option><option value="PARCIAL">Parcial</option><option value="PAGADA">Pagada</option></select><select name="metodoPago" defaultValue={selected.metodoPago ?? ""}><option value="">Sin método</option><option value="EFECTIVO">Efectivo</option><option value="TRANSFERENCIA">Transferencia</option><option value="TARJETA">Tarjeta</option><option value="CHEQUE">Cheque</option><option value="OTRO">Otro</option></select><input name="montoPagado" type="number" step="0.01" min="0" defaultValue={Number(selected.montoPagado)} placeholder="Monto pagado" /><input name="descuentoPorcentaje" type="number" step="0.01" min="0" max="100" defaultValue={Number(selected.descuentoPorcentaje ?? 0)} placeholder="% descuento" /></div><ItemList items={editItems} mode="remito" priceList={selected.listaPrecios} onRemove={(id) => setEditItems((current) => current.filter((item) => item.product.id !== id))} /><div className="add-line"><ProductPicker products={products} name="productoId" form="edit-remito-product" /><input name="cantidad" form="edit-remito-product" type="number" min="1" placeholder="Cantidad" required /><button type="submit" form="edit-remito-product">Agregar</button></div><Metric label="Nuevo subtotal" value={money(editItems.reduce((sum, item) => sum + item.cantidad * itemPrice(item.product, selected.listaPrecios), 0))} /><button>Guardar cambios</button></form>}<form id="edit-remito-product" onSubmit={addEditItem} /></section>}
-    {canWrite && <section className="panel remito-builder">
+    {selected && <section className="panel detail-panel"><div className="detail-head"><div><h2>Boleta #{selected.numero}</h2><span>{selected.cliente?.nombre} · {selected.estado}</span></div><button type="button" className="icon-button" onClick={() => setSelected(null)} title="Cerrar detalle"><X size={18} /></button></div><div className="detail-grid"><Metric label="Fecha" value={formatDate(selected.fecha)} /><Metric label="Subtotal" value={money(selected.subtotal ?? selected.total)} /><Metric label="Descuento" value={`${Number(selected.descuentoPorcentaje ?? 0)}%`} /><Metric label="Total" value={money(selected.total)} /><Metric label="Pagado" value={money(selected.montoPagado)} /><Metric label="Pago" value={selected.pagoEstado} /><Metric label="Vendedor" value={selected.vendedor?.nombre ?? "-"} /><Metric label="Comisión" value={money(selected.vendedor ? Number(selected.total) * Number(selected.vendedor.porcentajeComision) / 100 : 0)} /></div><Table rows={(selected.items ?? []).map(formatRemitoItemRow)} cols={[["codigoProducto", "Código"], ["nombreProducto", "Producto"], ["cantidad", "Cantidad"], ["precioFmt", "Unitario"], ["subtotalFmt", "Subtotal"]]} />{canWrite && selected.estado === "ACTIVO" && <form className="form" onSubmit={saveEdit}><h3>Editar boleta</h3><div className="form-grid"><select name="vendedorId" defaultValue={selected.vendedorId ?? ""}><option value="">Sin vendedor</option>{activeVendors.map((v) => <option value={v.id} key={v.id}>{v.nombre} · {Number(v.porcentajeComision)}%</option>)}</select><select name="pagoEstado" defaultValue={selected.pagoEstado}><option value="PENDIENTE">Pendiente</option><option value="PARCIAL">Parcial</option><option value="PAGADA">Pagada</option></select><select name="metodoPago" defaultValue={selected.metodoPago ?? ""}><option value="">Sin método</option><option value="EFECTIVO">Efectivo</option><option value="TRANSFERENCIA">Transferencia</option><option value="TARJETA">Tarjeta</option><option value="CHEQUE">Cheque</option><option value="OTRO">Otro</option></select><input name="montoPagado" type="number" step="0.01" min="0" defaultValue={Number(selected.montoPagado)} placeholder="Monto pagado" /><input name="descuentoPorcentaje" type="number" step="0.01" min="0" max="100" defaultValue={Number(selected.descuentoPorcentaje ?? 0)} placeholder="% descuento" /></div><ItemList items={editItems} mode="remito" priceList={selected.listaPrecios} onRemove={(id) => setEditItems((current) => current.filter((item) => item.product.id !== id))} /><div className="add-line"><ProductPicker products={products} name="productoId" form="edit-remito-product" value={editProductId} onChange={setEditProductId} /><input name="cantidad" form="edit-remito-product" type="number" min="1" placeholder="Cantidad" required /><button type="submit" form="edit-remito-product">Agregar</button></div><Metric label="Nuevo subtotal" value={money(editItems.reduce((sum, item) => sum + item.cantidad * itemPrice(item.product, selected.listaPrecios), 0))} /><button>Guardar cambios</button></form>}<form id="edit-remito-product" onSubmit={addEditItem} /></section>}
+    {canWrite && <section className="panel remito-builder" id="crear-boleta">
       <h2>Crear boleta</h2>
       <form className="form" onSubmit={create}>
-        <div className="step-block"><span className="step-badge">1</span><div className="form-grid"><select name="clienteId" required><option value="">Elegir cliente</option>{activeClients.map((c) => <option value={c.id} key={c.id}>{c.nombre} · saldo {money(c.saldoPendiente)}</option>)}</select><select name="vendedorId"><option value="">Sin vendedor</option>{activeVendors.map((v) => <option value={v.id} key={v.id}>{v.nombre} · {Number(v.porcentajeComision)}%</option>)}</select><select value={priceList} onChange={(e) => setPriceList(e.target.value as "MAYORISTA" | "MINORISTA")}><option value="MAYORISTA">Lista mayorista</option><option value="MINORISTA">Lista minorista</option></select><input name="fecha" type="date" defaultValue={dateInput()} required /></div></div>
-        <div className="step-block"><span className="step-badge">2</span><div className="add-line"><ProductPicker products={products} name="productoId" form="add-remito-product" /><input name="cantidad" form="add-remito-product" type="number" min="1" placeholder="Cantidad" required /><button type="submit" form="add-remito-product">Agregar</button></div></div>
-        <div className="step-block"><span className="step-badge">3</span><div className="form-grid"><select name="pagoEstado" defaultValue="PENDIENTE"><option value="PENDIENTE">Pendiente</option><option value="PARCIAL">Parcial</option><option value="PAGADA">Pagada</option></select><select name="metodoPago"><option value="">Sin método</option><option value="EFECTIVO">Efectivo</option><option value="TRANSFERENCIA">Transferencia</option><option value="TARJETA">Tarjeta</option><option value="CHEQUE">Cheque</option><option value="OTRO">Otro</option></select><input name="montoPagado" type="number" step="0.01" min="0" defaultValue="0" placeholder="Monto pagado" /><input name="descuentoPorcentaje" type="number" step="0.01" min="0" max="100" value={descuentoPorcentaje} onChange={(e) => setDescuentoPorcentaje(Number(e.target.value || 0))} placeholder="% descuento" /></div></div>
-        <div className="step-block"><span className="step-badge">4</span><div className="stack"><ItemList items={remitoItems} mode="remito" priceList={priceList} onRemove={(id) => setRemitoItems((current) => current.filter((item) => item.product.id !== id))} /><Metric label="Subtotal" value={money(subtotal)} />{descuentoPorcentaje > 0 && <Metric label={`Descuento ${descuentoPorcentaje}%`} value={`-${money(subtotal - total)}`} />}<Metric label="Total boleta" value={money(total)} />{error && <p className="error">{error}</p>}<button>Crear boleta</button></div></div>
+        <div className="step-block"><span className="step-badge">1</span><div className="step-content"><div className="step-title"><strong>Cliente y lista</strong><span>Elegí a quién se emite la boleta.</span></div><div className="form-grid"><EntityPicker items={activeClients} value={selectedClientId} onChange={setSelectedClientId} name="clienteId" title="Elegir cliente" placeholder="Elegir cliente" searchPlaceholder="Buscar por nombre, dirección o saldo" getLabel={(client) => client.nombre} getMeta={(client) => `${client.direccion ?? "Sin dirección"} · saldo ${money(client.saldoPendiente)}`} required /><EntityPicker items={activeVendors} value={selectedVendorId} onChange={setSelectedVendorId} name="vendedorId" title="Elegir vendedor" placeholder="Sin vendedor" searchPlaceholder="Buscar vendedor" getLabel={(vendor) => vendor.nombre} getMeta={(vendor) => `${Number(vendor.porcentajeComision)}% comisión`} /><select value={priceList} onChange={(e) => setPriceList(e.target.value as "MAYORISTA" | "MINORISTA")}><option value="MAYORISTA">Lista mayorista</option><option value="MINORISTA">Lista minorista</option></select><input name="fecha" type="date" defaultValue={dateInput()} required /></div></div></div>
+        <div className="step-block"><span className="step-badge">2</span><div className="step-content"><div className="step-title"><strong>Productos</strong><span>Buscá por código, nombre o rubro.</span></div><div className="add-line"><ProductPicker products={products} name="productoId" form="add-remito-product" value={builderProductId} onChange={setBuilderProductId} /><input name="cantidad" form="add-remito-product" type="number" min="1" placeholder="Cantidad" required /><button type="submit" form="add-remito-product">Agregar</button></div></div></div>
+        <div className="step-block"><span className="step-badge">3</span><div className="step-content"><div className="step-title"><strong>Pago y descuento</strong><span>Completá esta parte solo si querés registrar cobro o aplicar descuento.</span></div><div className="payment-grid"><label className="field-card"><span>Estado del pago</span><select name="pagoEstado" defaultValue="PENDIENTE"><option value="PENDIENTE">Pendiente</option><option value="PARCIAL">Parcial</option><option value="PAGADA">Pagada</option></select><small>Cómo queda la boleta para seguimiento.</small></label><label className="field-card"><span>Método de pago</span><select name="metodoPago"><option value="">Sin método</option><option value="EFECTIVO">Efectivo</option><option value="TRANSFERENCIA">Transferencia</option><option value="TARJETA">Tarjeta</option><option value="CHEQUE">Cheque</option><option value="OTRO">Otro</option></select><small>Opcional si todavía no pagó.</small></label><label className="field-card"><span>Monto abonado</span><input name="montoPagado" type="number" step="0.01" min="0" defaultValue="0" placeholder="Ej: 5000" /><small>Lo que entregó el cliente ahora.</small></label><label className="field-card"><span>Descuento</span><input name="descuentoPorcentaje" type="number" step="0.01" min="0" max="100" value={descuentoPorcentaje} onChange={(e) => setDescuentoPorcentaje(Number(e.target.value || 0))} placeholder="Ej: 10" /><small>Porcentaje sobre el subtotal.</small></label></div></div></div>
+        <div className="step-block"><span className="step-badge">4</span><div className="step-content"><div className="step-title"><strong>Resumen</strong><span>Revisá los productos antes de crearla.</span></div><div className="stack"><ItemList items={remitoItems} mode="remito" priceList={priceList} onRemove={(id) => setRemitoItems((current) => current.filter((item) => item.product.id !== id))} /><Metric label="Subtotal" value={money(subtotal)} />{descuentoPorcentaje > 0 && <Metric label={`Descuento ${descuentoPorcentaje}%`} value={`-${money(subtotal - total)}`} />}<Metric label="Total boleta" value={money(total)} />{error && <p className="error">{error}</p>}<button>Crear boleta</button></div></div></div>
       </form>
       <form id="add-remito-product" onSubmit={addBuilderItem} />
     </section>}
@@ -677,6 +753,19 @@ function remitoItemsFrom(items: any[], products: Product[]) {
     const product = products.find((p) => p.id === item.productoId) ?? { id: item.productoId, codigoInterno: item.codigoProducto, nombre: item.nombreProducto, stockActual: 0, stockMinimo: 0, precioMayorista: item.precioUnitario, precioMinorista: item.precioUnitario, costo: "0", activo: true };
     return { product, cantidad: item.cantidad };
   });
+}
+
+function SaleCard({ row, onOpen, onPdf, onCancel }: { row: any; onOpen: (row: any) => void; onPdf: (row: any) => void; onCancel?: (row: any) => void }) {
+  const pending = Math.max(Number(row.total) - Number(row.montoPagado ?? 0), 0);
+  return <article className="sale-card">
+    <button type="button" className="sale-main" onClick={() => onOpen(row)}>
+      <div className="sale-title"><strong>Boleta #{row.numero}</strong><span>{row.fechaCorta}</span></div>
+      <div className="sale-client"><strong>{row.cliente?.nombre ?? "Cliente"}</strong><span>{row.vendedor?.nombre ?? "Sin vendedor"}</span></div>
+      <div className="sale-badges"><span className={`status-chip ${String(row.pagoEstado).toLowerCase()}`}>{row.pagoEstado}</span><span className={`status-chip ${String(row.estado).toLowerCase()}`}>{row.estado}</span></div>
+      <div className="sale-money"><strong>{row.totalFmt}</strong><span>Pagado {row.pagadoFmt} · pendiente {money(pending)}</span></div>
+    </button>
+    <div className="sale-actions"><button type="button" className="secondary" onClick={() => onPdf(row)}>PDF</button>{onCancel && <button type="button" className="secondary" onClick={() => onCancel(row)}>Cancelar</button>}</div>
+  </article>;
 }
 
 function StockView({ api, isAdmin }: { api: ReturnType<typeof useApi>; isAdmin: boolean }) {
@@ -742,11 +831,6 @@ function ReportsView({ api }: { api: ReturnType<typeof useApi> }) {
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
-  const [vendors, setVendors] = useState<Vendor[]>([]);
-  const [selectedVendor, setSelectedVendor] = useState<Vendor | null>(null);
-  const [error, setError] = useState("");
-  const loadVendors = () => api("/vendedores?pageSize=100").then((d) => setVendors(d.items));
-  useEffect(() => { loadVendors(); }, []);
   async function download(kind: string, format: "pdf" | "xlsx") {
     const blob = await api(`/informes/${kind}?${qs({ year, month, format })}`, { headers: { Accept: format === "pdf" ? "application/pdf" : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" } });
     const url = URL.createObjectURL(blob);
@@ -755,30 +839,6 @@ function ReportsView({ api }: { api: ReturnType<typeof useApi> }) {
     a.download = `${kind}.${format}`;
     a.click();
     window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
-  }
-  async function createVendor(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const formEl = event.currentTarget;
-    const form = payload(formEl);
-    try {
-      await api("/vendedores", { method: "POST", body: JSON.stringify({ nombre: form.nombre, porcentajeComision: Number(form.porcentajeComision) }) });
-      formEl.reset();
-      await loadVendors();
-    } catch (err: any) {
-      setError(err.message ?? "No se pudo crear el vendedor");
-    }
-  }
-  async function updateVendor(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!selectedVendor) return;
-    const form = payload(event.currentTarget);
-    try {
-      await api(`/vendedores/${selectedVendor.id}`, { method: "PATCH", body: JSON.stringify({ nombre: form.nombre, porcentajeComision: Number(form.porcentajeComision), activo: form.activo === "true" }) });
-      setSelectedVendor(null);
-      await loadVendors();
-    } catch (err: any) {
-      setError(err.message ?? "No se pudo actualizar el vendedor");
-    }
   }
   const reportRows = [
     ["clientes", "Clientes con saldos"],
@@ -795,10 +855,67 @@ function ReportsView({ api }: { api: ReturnType<typeof useApi> }) {
       </div>
       <div className="report-list">{reportRows.map(([kind, label]) => <div className="report-row" key={kind}><strong>{label}</strong><div className="table-actions"><button type="button" className="secondary" onClick={() => download(kind, "pdf")}>PDF</button><button type="button" className="secondary" onClick={() => download(kind, "xlsx")}>Excel</button></div></div>)}</div>
     </section>
-    <div className="stack">
-      <section className="panel"><h2>Vendedores</h2><Table rows={vendors.map((v) => ({ ...v, comisionFmt: `${Number(v.porcentajeComision)}%`, estadoFmt: v.activo ? "Activo" : "Inactivo" }))} cols={[["nombre", "Nombre"], ["comisionFmt", "Comisión"], ["estadoFmt", "Estado"]]} onRowClick={setSelectedVendor} /></section>
-      {selectedVendor && <section className="panel"><h2>Editar vendedor</h2><form className="form" onSubmit={updateVendor}><input name="nombre" defaultValue={selectedVendor.nombre} required /><input name="porcentajeComision" type="number" step="0.01" min="0" max="100" defaultValue={Number(selectedVendor.porcentajeComision)} required /><select name="activo" defaultValue={String(selectedVendor.activo)}><option value="true">Activo</option><option value="false">Inactivo</option></select><button>Guardar vendedor</button></form></section>}
-      <section className="panel"><h2>Nuevo vendedor</h2><form className="form" onSubmit={createVendor}><input name="nombre" placeholder="Nombre" required /><input name="porcentajeComision" type="number" step="0.01" min="0" max="100" placeholder="% comisión" required />{error && <p className="error">{error}</p>}<button>Crear vendedor</button></form></section>
+  </div>;
+}
+
+function VendorsView({ api }: { api: ReturnType<typeof useApi> }) {
+  const [vendors, setVendors] = useState<Vendor[]>([]);
+  const [selectedVendor, setSelectedVendor] = useState<Vendor | null>(null);
+  const [vendorModal, setVendorModal] = useState<"create" | "edit" | null>(null);
+  const [error, setError] = useState("");
+  const loadVendors = () => api("/vendedores?pageSize=100").then((d) => setVendors(d.items));
+  useEffect(() => { loadVendors(); }, []);
+  async function createVendor(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formEl = event.currentTarget;
+    const form = payload(formEl);
+    try {
+      await api("/vendedores", { method: "POST", body: JSON.stringify({ nombre: form.nombre, porcentajeComision: Number(form.porcentajeComision) }) });
+      formEl.reset();
+      setVendorModal(null);
+      await loadVendors();
+    } catch (err: any) {
+      setError(err.message ?? "No se pudo crear el vendedor");
+    }
+  }
+  async function updateVendor(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedVendor) return;
+    const form = payload(event.currentTarget);
+    try {
+      await api(`/vendedores/${selectedVendor.id}`, { method: "PATCH", body: JSON.stringify({ nombre: form.nombre, porcentajeComision: Number(form.porcentajeComision), activo: form.activo === "true" }) });
+      setSelectedVendor(null);
+      setVendorModal(null);
+      await loadVendors();
+    } catch (err: any) {
+      setError(err.message ?? "No se pudo actualizar el vendedor");
+    }
+  }
+  const activeCount = vendors.filter((vendor) => vendor.activo).length;
+  return <div className="client-page">
+    <section className="panel vendor-panel wide">
+      <div className="detail-head"><div><h2>Vendedores</h2><span>{activeCount} activos · comisiones aplicadas en ventas.</span></div><button type="button" onClick={() => { setError(""); setSelectedVendor(null); setVendorModal("create"); }}>Nuevo vendedor</button></div>
+      <div className="vendor-list vendor-list-grid">{vendors.map((vendor) => <button type="button" className="vendor-card" key={vendor.id} onClick={() => { setError(""); setSelectedVendor(vendor); setVendorModal("edit"); }}><div><strong>{vendor.nombre}</strong><span>{vendor.activo ? "Activo" : "Inactivo"}</span></div><strong>{Number(vendor.porcentajeComision)}%</strong></button>)}{!vendors.length && <p className="muted">No hay vendedores cargados.</p>}</div>
+    </section>
+    {vendorModal === "create" && <VendorModal title="Nuevo vendedor" onClose={() => setVendorModal(null)} onSubmit={createVendor} error={error} />}
+    {vendorModal === "edit" && selectedVendor && <VendorModal title="Editar vendedor" vendor={selectedVendor} onClose={() => { setVendorModal(null); setSelectedVendor(null); }} onSubmit={updateVendor} error={error} />}
+  </div>;
+}
+
+function VendorModal({ title, vendor, onClose, onSubmit, error }: { title: string; vendor?: Vendor; onClose: () => void; onSubmit: (event: React.FormEvent<HTMLFormElement>) => void; error?: string }) {
+  return <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label={title}>
+    <div className="form-modal">
+      <div className="selector-head">
+        <div><h3>{title}</h3><span>{vendor ? "Actualizá la comisión o el estado." : "Cargá el nombre y porcentaje de comisión."}</span></div>
+        <button type="button" className="icon-button" onClick={onClose} title="Cerrar"><X size={18} /></button>
+      </div>
+      <form className="form" onSubmit={onSubmit}>
+        <input name="nombre" defaultValue={vendor?.nombre ?? ""} placeholder="Nombre" required autoFocus />
+        <input name="porcentajeComision" type="number" step="0.01" min="0" max="100" defaultValue={vendor ? Number(vendor.porcentajeComision) : undefined} placeholder="% comisión" required />
+        {vendor && <select name="activo" defaultValue={String(vendor.activo)}><option value="true">Activo</option><option value="false">Inactivo</option></select>}
+        {error && <p className="error">{error}</p>}
+        <div className="modal-actions"><button type="button" className="secondary" onClick={onClose}>Cancelar</button><button>{vendor ? "Guardar cambios" : "Crear vendedor"}</button></div>
+      </form>
     </div>
   </div>;
 }
@@ -849,10 +966,56 @@ function itemPrice(product: Product, list: "MAYORISTA" | "MINORISTA") {
   return Number(list === "MAYORISTA" ? product.precioMayorista : product.precioMinorista);
 }
 
-function ProductPicker({ products, name, form }: { products: Product[]; name: string; form?: string }) {
+function EntityPicker<T extends { id: string }>({ items, value, onChange, name, form, title, placeholder, searchPlaceholder, getLabel, getMeta, required = false }: { items: T[]; value: string; onChange: (value: string) => void; name?: string; form?: string; title: string; placeholder: string; searchPlaceholder: string; getLabel: (item: T) => string; getMeta?: (item: T) => string; required?: boolean }) {
+  const [open, setOpen] = useState(false);
   const [term, setTerm] = useState("");
-  const filtered = products.filter((product) => `${product.codigoInterno} ${product.nombre} ${product.categoria?.nombre ?? ""}`.toLowerCase().includes(term.toLowerCase().trim()));
-  return <div className="picker"><input value={term} onChange={(e) => setTerm(e.target.value)} placeholder="Buscar producto por código o nombre" /><select name={name} form={form} required><option value="">Producto</option>{filtered.map((p) => <option value={p.id} key={p.id}>{p.codigoInterno} · {p.nombre} · stock {p.stockActual}</option>)}</select></div>;
+  const [letter, setLetter] = useState("");
+  const selected = items.find((item) => item.id === value);
+  const normalizedTerm = term.toLowerCase().trim();
+  const sortedItems = [...items].sort((a, b) => getLabel(a).localeCompare(getLabel(b), "es"));
+  const letters = Array.from(new Set(sortedItems.map((item) => getLabel(item).trim().charAt(0).toUpperCase()).filter(Boolean)));
+  const visibleItems = sortedItems.filter((item) => {
+    const haystack = `${getLabel(item)} ${getMeta?.(item) ?? ""}`.toLowerCase();
+    const matchesTerm = !normalizedTerm || haystack.includes(normalizedTerm);
+    const matchesLetter = !letter || getLabel(item).trim().toUpperCase().startsWith(letter);
+    return matchesTerm && matchesLetter;
+  });
+  function choose(next: string) {
+    onChange(next);
+    setOpen(false);
+    setTerm("");
+    setLetter("");
+  }
+  return <div className="entity-picker">
+    {name && <select className="sr-select" name={name} form={form} value={value} required={required} onChange={(event) => onChange(event.target.value)} aria-hidden="true" tabIndex={-1}><option value=""></option>{items.map((item) => <option value={item.id} key={item.id}>{getLabel(item)}</option>)}</select>}
+    <button type="button" className={`picker-trigger${selected ? " has-value" : ""}`} onClick={() => setOpen(true)}>
+      <span>{selected ? getLabel(selected) : placeholder}</span>
+      {selected && getMeta && <small>{getMeta(selected)}</small>}
+    </button>
+    {open && <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label={title}>
+      <div className="selector-modal">
+        <div className="selector-head">
+          <div><h3>{title}</h3><span>{visibleItems.length} resultado{visibleItems.length === 1 ? "" : "s"}</span></div>
+          <button type="button" className="icon-button" onClick={() => setOpen(false)} title="Cerrar"><X size={18} /></button>
+        </div>
+        <div className="selector-search"><Search size={18} /><input autoFocus value={term} onChange={(event) => setTerm(event.target.value)} placeholder={searchPlaceholder} /></div>
+        <div className="letter-strip">
+          <button type="button" className={!letter ? "active" : undefined} onClick={() => setLetter("")}>Todos</button>
+          {letters.map((itemLetter) => <button type="button" className={letter === itemLetter ? "active" : undefined} key={itemLetter} onClick={() => setLetter(itemLetter)}>{itemLetter}</button>)}
+        </div>
+        <div className="selector-list">
+          {!required && <button type="button" className="selector-row muted-choice" onClick={() => choose("")}><strong>{placeholder}</strong><span>Dejar sin seleccionar</span></button>}
+          {visibleItems.map((item) => <button type="button" className="selector-row" key={item.id} onClick={() => choose(item.id)}><strong>{getLabel(item)}</strong>{getMeta && <span>{getMeta(item)}</span>}</button>)}
+          {!visibleItems.length && <p className="muted empty-selector">No hay resultados.</p>}
+        </div>
+      </div>
+    </div>}
+  </div>;
+}
+
+function ProductPicker({ products, name, form, value, onChange }: { products: Product[]; name: string; form?: string; value?: string; onChange?: (value: string) => void }) {
+  const [internalValue, setInternalValue] = useState("");
+  return <EntityPicker items={products} value={value ?? internalValue} onChange={onChange ?? setInternalValue} name={name} form={form} title="Elegir producto" placeholder="Elegir producto" searchPlaceholder="Buscar por código, nombre o rubro" getLabel={(product) => product.nombre} getMeta={(product) => `${product.codigoInterno} · stock ${product.stockActual} · ${product.categoria?.nombre ?? "Sin rubro"}`} required />;
 }
 
 function ItemList({ items, mode, onRemove, priceList }: { items: LineItem[]; mode: "compra" | "remito"; onRemove: (productId: string) => void; priceList?: "MAYORISTA" | "MINORISTA" }) {
