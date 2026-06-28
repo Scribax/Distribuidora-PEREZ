@@ -72,6 +72,7 @@ export const remitoSchema = z.object({
   pagoEstado: z.enum(["PENDIENTE", "PARCIAL", "PAGADA"]).default("PENDIENTE"),
   metodoPago: z.enum(["EFECTIVO", "TRANSFERENCIA", "TARJETA", "CHEQUE", "OTRO"]).optional().nullable(),
   montoPagado: moneySchema.default(0),
+  descuentoPorcentaje: z.coerce.number().min(0).max(100).default(0),
   fecha: z.coerce.date().default(() => new Date()),
   items: z.array(z.object({
     productoId: z.string().uuid(),
@@ -83,6 +84,7 @@ export const remitoUpdateSchema = z.object({
   pagoEstado: z.enum(["PENDIENTE", "PARCIAL", "PAGADA"]).optional(),
   metodoPago: z.enum(["EFECTIVO", "TRANSFERENCIA", "TARJETA", "CHEQUE", "OTRO"]).optional().nullable(),
   montoPagado: moneySchema.optional(),
+  descuentoPorcentaje: z.coerce.number().min(0).max(100).optional(),
   vendedorId: z.string().uuid().optional().nullable(),
   items: z.array(z.object({
     productoId: z.string().uuid(),

@@ -24,6 +24,11 @@ function normalizePayment(total: number, montoPagado: number, pagoEstado?: PagoE
   return { montoPagado: paid, pagoEstado: PagoEstado.PARCIAL };
 }
 
+function totalWithDiscount(subtotal: number, descuentoPorcentaje: number) {
+  const discount = Math.min(Math.max(descuentoPorcentaje, 0), 100);
+  return Number((subtotal * (1 - discount / 100)).toFixed(2));
+}
+
 remittancesRouter.get("/", async (req, res) => {
   const { skip, take, page, pageSize } = pageArgs(req.query);
   const numero = req.query.numero ? Number(req.query.numero) : undefined;
@@ -90,7 +95,8 @@ remittancesRouter.post("/", requireRoles(Rol.ADMINISTRADOR, Rol.EMPLEADO), async
         subtotal: precio * item.cantidad
       };
     });
-    const total = items.reduce((sum, item) => sum + item.subtotal, 0);
+    const subtotal = items.reduce((sum, item) => sum + item.subtotal, 0);
+    const total = totalWithDiscount(subtotal, input.descuentoPorcentaje);
     const payment = normalizePayment(total, input.montoPagado, input.pagoEstado as PagoEstado | undefined);
     const created = await tx.remito.create({
       data: {
@@ -98,6 +104,8 @@ remittancesRouter.post("/", requireRoles(Rol.ADMINISTRADOR, Rol.EMPLEADO), async
         vendedorId: input.vendedorId || null,
         listaPrecios: input.listaPrecios,
         saldoClienteAlEmitir: cliente.saldoPendiente,
+        subtotal,
+        descuentoPorcentaje: input.descuentoPorcentaje,
         total,
         montoPagado: payment.montoPagado,
         pagoEstado: payment.pagoEstado,
@@ -135,6 +143,7 @@ remittancesRouter.put("/:id", requireRoles(Rol.ADMINISTRADOR, Rol.EMPLEADO), asy
       if (!vendedor?.activo) fail(422, "VENDEDOR_INACTIVO", "El vendedor debe existir y estar activo");
     }
 
+    let subtotal = Number(remito.subtotal);
     let total = Number(remito.total);
     if (input.items) {
       const productos = await ensureActiveProducts(tx, input.items.map((i) => i.productoId));
@@ -178,13 +187,19 @@ remittancesRouter.put("/:id", requireRoles(Rol.ADMINISTRADOR, Rol.EMPLEADO), asy
           });
         }
       }
-      total = newItems.reduce((sum, item) => sum + item.subtotal, 0);
+      subtotal = newItems.reduce((sum, item) => sum + item.subtotal, 0);
+      total = totalWithDiscount(subtotal, input.descuentoPorcentaje ?? Number(remito.descuentoPorcentaje));
+    }
+    if (input.descuentoPorcentaje !== undefined && !input.items) {
+      total = totalWithDiscount(subtotal, input.descuentoPorcentaje);
     }
     const payment = normalizePayment(total, input.montoPagado ?? Number(remito.montoPagado), input.pagoEstado as PagoEstado | undefined);
     return tx.remito.update({
       where: { id: remito.id },
       data: {
         total,
+        subtotal,
+        descuentoPorcentaje: input.descuentoPorcentaje ?? undefined,
         montoPagado: payment.montoPagado,
         pagoEstado: payment.pagoEstado,
         metodoPago: input.metodoPago === undefined ? undefined : input.metodoPago as MetodoPago | null,
@@ -229,65 +244,55 @@ remittancesRouter.get("/:id/pdf", async (req, res) => {
 
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader("Content-Disposition", `inline; filename="boleta-${remito.numero}.pdf"`);
-  const doc = new PDFDocument({ margin: 48 });
+  const doc = new PDFDocument({ size: [595.28, 420], margin: 24 });
   doc.pipe(res);
   const money = (value: unknown) => `$${Number(value).toFixed(2)}`;
   const pageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
-  const left = 48;
+  const left = 24;
   const right = left + pageWidth;
 
-  doc.image(brandLogoPath, left, 36, { width: 150 });
-  doc.fontSize(16).text(`Boleta Nro. ${remito.numero}`, right - 190, 48, { width: 190, align: "right" });
-  doc.moveTo(left, 132).lineTo(right, 132).strokeColor("#166534").stroke();
+  doc.image(brandLogoPath, left, 18, { width: 118 });
+  doc.fontSize(15).fillColor("#111111").text(`Boleta Nro. ${remito.numero}`, right - 170, 24, { width: 170, align: "right" });
+  doc.fontSize(9).fillColor("#555555").text(`Fecha: ${remito.fecha.toISOString().slice(0, 10)}`, right - 170, 46, { width: 170, align: "right" });
+  doc.text(`Estado: ${remito.estado === "ACTIVO" ? "Activo" : "Cancelado"}`, right - 170, 60, { width: 170, align: "right" });
+  doc.moveTo(left, 82).lineTo(right, 82).strokeColor("#166534").stroke();
 
-  doc.roundedRect(left, 150, pageWidth, 82, 6).strokeColor("#d9e2dd").stroke();
-  doc.fontSize(10).fillColor("#496054").text("Fecha", left + 16, 166);
-  doc.fillColor("#111111").text(remito.fecha.toISOString().slice(0, 10), left + 16, 182);
-  doc.fillColor("#496054").text("Lista de precios", left + 180, 166);
-  doc.fillColor("#111111").text(remito.listaPrecios === "MAYORISTA" ? "Mayorista" : "Minorista", left + 180, 182);
-  doc.fillColor("#496054").text("Estado", left + 360, 166);
-  doc.fillColor("#111111").text(remito.estado === "ACTIVO" ? "Activo" : "Cancelado", left + 360, 182);
-  doc.fillColor("#166534").fontSize(13).text(`Pago: ${remito.pagoEstado} · abonado ${money(remito.montoPagado)}`, left + 16, 208);
+  doc.fontSize(10).fillColor("#111111").text(`Cliente: ${remito.cliente.nombre}`, left, 96, { width: 250 });
+  doc.text(`Dirección: ${remito.cliente.direccion ?? "-"}`, left, 112, { width: 250 });
+  doc.text(`Vendedor: ${remito.vendedor?.nombre ?? "-"}`, left + 285, 96, { width: 150 });
+  doc.text(`Pago: ${remito.pagoEstado}`, left + 285, 112, { width: 150 });
+  doc.fillColor("#166534").fontSize(11).text(`Saldo pendiente: ${money(remito.saldoClienteAlEmitir)}`, left, 134, { width: 250 });
+  doc.fillColor("#111111").fontSize(9).text(`Abonado: ${money(remito.montoPagado)}${remito.metodoPago ? ` · ${remito.metodoPago}` : ""}`, left + 285, 134, { width: 230 });
 
-  doc.roundedRect(left, 248, pageWidth, 92, 6).strokeColor("#d9e2dd").stroke();
-  doc.fontSize(13).fillColor("#111111").text("Cliente", left + 16, 264);
-  doc.fontSize(10);
-  doc.fillColor("#496054").text("Nombre", left + 16, 288);
-  doc.fillColor("#111111").text(remito.cliente.nombre, left + 78, 288, { width: 260 });
-  doc.fillColor("#496054").text("Dirección", left + 16, 310);
-  doc.fillColor("#111111").text(remito.cliente.direccion ?? "-", left + 78, 310, { width: 260 });
-  doc.fillColor("#496054").text("Vendedor", left + 350, 288);
-  doc.fillColor("#111111").text(remito.vendedor?.nombre ?? "-", left + 410, 288, { width: 120 });
-  doc.fillColor("#496054").text("Método", left + 350, 310);
-  doc.fillColor("#111111").text(remito.metodoPago ?? "-", left + 410, 310, { width: 120 });
-
-  doc.fontSize(13).fillColor("#111111").text("Productos", left, 364);
-  const startX = 48;
-  let y = 390;
-  doc.fontSize(9).fillColor("#496054");
-  doc.text("Código", startX, y, { width: 70 });
-  doc.text("Producto", startX + 75, y, { width: 210 });
-  doc.text("Cant.", startX + 295, y, { width: 45, align: "right" });
-  doc.text("Unitario", startX + 350, y, { width: 75, align: "right" });
-  doc.text("Subtotal", startX + 435, y, { width: 80, align: "right" });
+  const startX = left;
+  let y = 164;
+  doc.fontSize(8).fillColor("#496054");
+  doc.text("Código", startX, y, { width: 55 });
+  doc.text("Producto", startX + 60, y, { width: 220 });
+  doc.text("Cant.", startX + 285, y, { width: 40, align: "right" });
+  doc.text("Unit.", startX + 335, y, { width: 70, align: "right" });
+  doc.text("Subtotal", startX + 415, y, { width: 90, align: "right" });
   y += 18;
   doc.moveTo(startX, y - 4).lineTo(startX + pageWidth, y - 4).strokeColor("#d9e2dd").stroke();
-  doc.fillColor("#111111").fontSize(9);
+  doc.fillColor("#111111").fontSize(8);
   for (const item of remito.items) {
-    if (y > 720) {
+    if (y > 320) {
       doc.addPage();
-      y = 48;
+      y = 28;
     }
     doc.moveTo(startX, y - 4).lineTo(startX + pageWidth, y - 4).strokeColor("#edf1ee").stroke();
-    doc.text(item.codigoProducto, startX, y, { width: 70 });
-    doc.text(item.nombreProducto, startX + 75, y, { width: 210 });
-    doc.text(String(item.cantidad), startX + 295, y, { width: 45, align: "right" });
-    doc.text(money(item.precioUnitario), startX + 350, y, { width: 75, align: "right" });
-    doc.text(money(item.subtotal), startX + 435, y, { width: 80, align: "right" });
-    y += 20;
+    doc.text(item.codigoProducto, startX, y, { width: 55 });
+    doc.text(item.nombreProducto, startX + 60, y, { width: 220 });
+    doc.text(String(item.cantidad), startX + 285, y, { width: 40, align: "right" });
+    doc.text(money(item.precioUnitario), startX + 335, y, { width: 70, align: "right" });
+    doc.text(money(item.subtotal), startX + 415, y, { width: 90, align: "right" });
+    y += 16;
   }
   doc.moveTo(startX, y).lineTo(startX + pageWidth, y).strokeColor("#d9e2dd").stroke();
-  doc.fontSize(15).fillColor("#166534").text(`Total: ${money(remito.total)}`, startX + 335, y + 14, { width: 180, align: "right" });
-  doc.fillColor("#111111").fontSize(8).text("Documento interno sin validez fiscal.", 48, doc.page.height - 64, { align: "center", width: pageWidth });
+  const discountAmount = Number(remito.subtotal) - Number(remito.total);
+  doc.fontSize(9).fillColor("#111111").text(`Subtotal: ${money(remito.subtotal)}`, right - 170, y + 10, { width: 170, align: "right" });
+  doc.text(`Descuento ${Number(remito.descuentoPorcentaje)}%: -${money(discountAmount)}`, right - 170, y + 25, { width: 170, align: "right" });
+  doc.fontSize(14).fillColor("#166534").text(`Total: ${money(remito.total)}`, right - 170, y + 42, { width: 170, align: "right" });
+  doc.fillColor("#111111").fontSize(7).text("Documento interno sin validez fiscal.", left, doc.page.height - 28, { align: "center", width: pageWidth });
   doc.end();
 });
