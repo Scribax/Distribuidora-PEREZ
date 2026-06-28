@@ -104,8 +104,40 @@ docker compose exec api npx prisma migrate deploy --schema apps/api/prisma/schem
 
 ## Backups
 
-Ejemplo de cron diario a las 03:00:
+En VPS se recomienda instalar el timer systemd incluido. Ejecuta un backup diario a las 03:00, guarda archivos comprimidos en `/var/backups/perez`, conserva 30 días por defecto y mantiene un enlace `latest.sql.gz`.
+
+Instalar o reinstalar:
+
+```bash
+cd ~/Distribuidora-PEREZ
+chmod +x scripts/*.sh
+PROJECT_DIR="$(pwd)" ./scripts/install-backup-systemd.sh
+```
+
+Ver estado:
+
+```bash
+systemctl status perez-backup.timer --no-pager
+systemctl list-timers perez-backup.timer --no-pager
+ls -lh /var/backups/perez
+```
+
+Ejecutar un backup manual:
+
+```bash
+cd ~/Distribuidora-PEREZ
+BACKUP_DIR=/var/backups/perez ./scripts/backup-postgres.sh
+```
+
+Restaurar un backup en el contenedor de PostgreSQL:
+
+```bash
+cd ~/Distribuidora-PEREZ
+docker compose exec -T db psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" < <(gunzip -c /var/backups/perez/latest.sql.gz)
+```
+
+Alternativa con cron diario a las 03:00:
 
 ```cron
-0 3 * * * cd /ruta/al/proyecto && BACKUP_DIR=/var/backups/perez ./scripts/backup-postgres.sh >> /var/log/perez-backup.log 2>&1
+0 3 * * * cd /root/Distribuidora-PEREZ && BACKUP_DIR=/var/backups/perez ./scripts/backup-postgres.sh >> /var/log/perez-backup.log 2>&1
 ```

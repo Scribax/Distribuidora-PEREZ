@@ -1,0 +1,12 @@
+[Unit]
+Description=Distribuidora Perez PostgreSQL backup
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/root/Distribuidora-PEREZ
+Environment=PROJECT_DIR=/root/Distribuidora-PEREZ
+Environment=BACKUP_DIR=/var/backups/perez
+Environment=BACKUP_RETENTION_DAYS=30
+ExecStart=/root/Distribuidora-PEREZ/scripts/backup-postgres.sh
