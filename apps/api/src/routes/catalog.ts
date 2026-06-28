@@ -2,13 +2,22 @@ import { Router } from "express";
 import { Prisma, Rol } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { fail } from "../lib/errors.js";
-import { categoriaSchema, productoSchema, productoUpdateSchema } from "../lib/schemas.js";
+import { aumentoPreciosSchema, categoriaSchema, productoSchema, productoUpdateSchema } from "../lib/schemas.js";
 import { pageArgs } from "../lib/validation.js";
 import { requireAuth, requireRoles } from "../middleware/auth.js";
 import { adjustProductStock } from "../lib/stock.js";
 
 export const catalogRouter = Router();
 catalogRouter.use(requireAuth);
+
+async function nextProductCode(tx: Pick<typeof prisma, "producto"> = prisma) {
+  const products = await tx.producto.findMany({ select: { codigoInterno: true } });
+  const max = products.reduce((current, product) => {
+    const parsed = Number(product.codigoInterno);
+    return Number.isInteger(parsed) && parsed > current ? parsed : current;
+  }, 0);
+  return String(max + 1);
+}
 
 catalogRouter.get("/categorias", async (_req, res) => {
   res.json(await prisma.categoria.findMany({ orderBy: { nombre: "asc" } }));
@@ -65,7 +74,8 @@ catalogRouter.post("/productos", requireRoles(Rol.ADMINISTRADOR, Rol.EMPLEADO), 
   if (!categoria?.activo) fail(422, "CATEGORIA_INACTIVA", "La categoría debe existir y estar activa");
   try {
     const producto = await prisma.$transaction(async (tx) => {
-      const created = await tx.producto.create({ data: input });
+      const codigoInterno = input.codigoInterno || await nextProductCode(tx);
+      const created = await tx.producto.create({ data: { ...input, codigoInterno } });
       if (created.stockActual > 0) {
         await tx.movimientoStock.create({
           data: {
@@ -84,6 +94,26 @@ catalogRouter.post("/productos", requireRoles(Rol.ADMINISTRADOR, Rol.EMPLEADO), 
   } catch {
     fail(422, "CODIGO_DUPLICADO", "El código interno ya existe en otro producto");
   }
+});
+
+catalogRouter.post("/productos/aumentar-precios", requireRoles(Rol.ADMINISTRADOR), async (req, res) => {
+  const input = aumentoPreciosSchema.parse(req.body);
+  const factor = 1 + input.porcentaje / 100;
+  const productos = await prisma.producto.findMany({
+    where: {
+      activo: true,
+      categoriaId: input.categoriaId || undefined
+    },
+    select: { id: true, precioMayorista: true, precioMinorista: true }
+  });
+  await prisma.$transaction(productos.map((producto) => prisma.producto.update({
+    where: { id: producto.id },
+    data: {
+      precioMayorista: input.aplicarMayorista ? Number(producto.precioMayorista) * factor : undefined,
+      precioMinorista: input.aplicarMinorista ? Number(producto.precioMinorista) * factor : undefined
+    }
+  })));
+  res.json({ actualizados: productos.length });
 });
 
 catalogRouter.patch("/productos/:id", requireRoles(Rol.ADMINISTRADOR, Rol.EMPLEADO), async (req, res) => {

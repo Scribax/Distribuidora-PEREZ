@@ -38,6 +38,20 @@ enum ListaPrecios {
   MINORISTA
 }
 
+enum PagoEstado {
+  PENDIENTE
+  PARCIAL
+  PAGADA
+}
+
+enum MetodoPago {
+  EFECTIVO
+  TRANSFERENCIA
+  TARJETA
+  CHEQUE
+  OTRO
+}
+
 model User {
   id            String            @id @default(uuid()) @db.Uuid
   nombre        String            @db.VarChar(100)
@@ -76,6 +90,19 @@ model Categoria {
   createdAt DateTime   @default(now()) @map("created_at")
 
   @@map("categorias")
+}
+
+model Vendedor {
+  id                  String   @id @default(uuid()) @db.Uuid
+  nombre              String   @db.VarChar(120)
+  porcentajeComision  Decimal  @default(0) @map("porcentaje_comision") @db.Decimal(5, 2)
+  activo              Boolean  @default(true)
+  remitos             Remito[]
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  @@index([activo])
+  @@map("vendedores")
 }
 
 model Producto {
@@ -174,20 +201,27 @@ model Remito {
   id                    String        @id @default(uuid()) @db.Uuid
   numero                Int           @unique @default(autoincrement())
   clienteId             String        @map("cliente_id") @db.Uuid
+  vendedorId            String?       @map("vendedor_id") @db.Uuid
   listaPrecios          ListaPrecios  @map("lista_precios")
   saldoClienteAlEmitir  Decimal       @map("saldo_cliente_al_emitir") @db.Decimal(12, 2)
   total                 Decimal       @db.Decimal(12, 2)
+  montoPagado           Decimal       @default(0) @map("monto_pagado") @db.Decimal(12, 2)
+  pagoEstado            PagoEstado    @default(PENDIENTE) @map("pago_estado")
+  metodoPago            MetodoPago?   @map("metodo_pago")
   estado                RemitoEstado  @default(ACTIVO)
   fecha                 DateTime      @db.Date
   usuarioId             String        @map("usuario_id") @db.Uuid
   cliente               Cliente       @relation(fields: [clienteId], references: [id])
+  vendedor              Vendedor?     @relation(fields: [vendedorId], references: [id])
   usuario               User          @relation(fields: [usuarioId], references: [id])
   items                 RemitoItem[]
   createdAt             DateTime      @default(now()) @map("created_at")
   updatedAt             DateTime      @updatedAt @map("updated_at")
 
   @@index([clienteId])
+  @@index([vendedorId])
   @@index([estado])
+  @@index([pagoEstado])
   @@index([fecha])
   @@map("remitos")
 }

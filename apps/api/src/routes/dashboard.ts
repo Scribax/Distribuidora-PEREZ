@@ -26,7 +26,7 @@ dashboardRouter.get("/", async (_req, res) => {
     metricsFor(start, end),
     prisma.producto.findMany({ where: { activo: true }, select: { costo: true, stockActual: true } }),
     prisma.producto.findMany({ where: { activo: true, stockActual: { lte: prisma.producto.fields.stockMinimo } }, include: { categoria: true }, orderBy: { nombre: "asc" } }),
-    prisma.remito.findMany({ take: 10, include: { cliente: true }, orderBy: { numero: "desc" } })
+    prisma.remito.findMany({ take: 10, include: { cliente: true, vendedor: true }, orderBy: { numero: "desc" } })
   ]);
   const chart = await Promise.all(Array.from({ length: 6 }, async (_, index) => {
     const date = subMonths(now, 5 - index);

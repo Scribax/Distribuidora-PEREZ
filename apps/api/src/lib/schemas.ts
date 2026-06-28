@@ -30,7 +30,7 @@ export const categoriaSchema = z.object({
 });
 
 export const productoSchema = z.object({
-  codigoInterno: text(50).refine((v) => !/\s/.test(v), "El código interno no puede contener espacios"),
+  codigoInterno: text(50).refine((v) => !/\s/.test(v), "El código interno no puede contener espacios").optional(),
   nombre: text(200),
   categoriaId: z.string().uuid(),
   precioMayorista: moneySchema,
@@ -67,7 +67,11 @@ export const compraSchema = z.object({
 
 export const remitoSchema = z.object({
   clienteId: z.string().uuid(),
+  vendedorId: z.string().uuid().optional().nullable(),
   listaPrecios: z.enum(["MAYORISTA", "MINORISTA"]),
+  pagoEstado: z.enum(["PENDIENTE", "PARCIAL", "PAGADA"]).default("PENDIENTE"),
+  metodoPago: z.enum(["EFECTIVO", "TRANSFERENCIA", "TARJETA", "CHEQUE", "OTRO"]).optional().nullable(),
+  montoPagado: moneySchema.default(0),
   fecha: z.coerce.date().default(() => new Date()),
   items: z.array(z.object({
     productoId: z.string().uuid(),
@@ -76,10 +80,14 @@ export const remitoSchema = z.object({
 });
 
 export const remitoUpdateSchema = z.object({
+  pagoEstado: z.enum(["PENDIENTE", "PARCIAL", "PAGADA"]).optional(),
+  metodoPago: z.enum(["EFECTIVO", "TRANSFERENCIA", "TARJETA", "CHEQUE", "OTRO"]).optional().nullable(),
+  montoPagado: moneySchema.optional(),
+  vendedorId: z.string().uuid().optional().nullable(),
   items: z.array(z.object({
     productoId: z.string().uuid(),
     cantidad: positiveIntSchema
-  })).min(1)
+  })).min(1).optional()
 });
 
 export const ajusteStockSchema = z.object({
@@ -87,3 +95,16 @@ export const ajusteStockSchema = z.object({
   cantidadNueva: nonNegativeIntSchema,
   motivo: text(300).refine((v) => v.length >= 10, "El motivo debe tener al menos 10 caracteres")
 });
+
+export const vendedorSchema = z.object({
+  nombre: text(120),
+  porcentajeComision: moneySchema.max(100).default(0),
+  activo: z.boolean().optional()
+});
+
+export const aumentoPreciosSchema = z.object({
+  categoriaId: z.string().uuid().optional().nullable(),
+  porcentaje: z.coerce.number().min(-99).max(1000),
+  aplicarMayorista: z.boolean().default(true),
+  aplicarMinorista: z.boolean().default(true)
+}).refine((value) => value.aplicarMayorista || value.aplicarMinorista, "Debe seleccionar al menos una lista de precios");

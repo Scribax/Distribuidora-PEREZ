@@ -11,6 +11,7 @@ type User = { id: string; nombre: string; email: string; rol: Role; activo?: boo
 type Session = { accessToken: string; refreshToken: string; user: User };
 type Product = { id: string; codigoInterno: string; nombre: string; stockActual: number; stockMinimo: number; precioMayorista: string; precioMinorista: string; costo: string; activo: boolean; categoriaId?: string; categoria?: { id?: string; nombre: string }; movimientos?: any[] };
 type Client = { id: string; nombre: string; empresa?: string; direccion?: string; telefono?: string; email?: string; observaciones?: string; saldoPendiente: string; activo: boolean; remitos?: any[] };
+type Vendor = { id: string; nombre: string; porcentajeComision: string; activo: boolean };
 type Dashboard = { ventasMes: number; comprasMes: number; balanceMes: number; valorStock: number; stockBajo: Product[]; ultimosRemitos: any[]; chart: { mes: string; ventas: number; compras: number }[] };
 type LineItem = { product: Product; cantidad: number; costoUnitario?: number; actualizarCosto?: boolean };
 
@@ -67,7 +68,8 @@ function useApi(session: Session | null, setSession: (s: Session | null) => void
     }
     if (!res.ok) throw await res.json();
     if (res.status === 204) return null;
-    if (res.headers.get("content-type")?.includes("application/pdf")) return res.blob();
+    const contentType = res.headers.get("content-type") ?? "";
+    if (contentType.includes("application/pdf") || contentType.includes("spreadsheet")) return res.blob();
     return res.json();
   }, [session, setSession]);
 }
@@ -114,8 +116,9 @@ function App() {
     ["productos", Boxes, "Productos"],
     ["clientes", Users, "Clientes"],
     ["compras", ShoppingCart, "Compras"],
-    ["remitos", ReceiptText, "Remitos"],
+    ["remitos", ReceiptText, "Ventas"],
     ...(session.user.rol === "CONSULTA" ? [] : [["balance", Calculator, "Balance"] as const]),
+    ...(session.user.rol === "CONSULTA" ? [] : [["informes", BarChart3, "Informes"] as const]),
     ["stock", PackagePlus, "Stock"],
     ...(session.user.rol === "ADMINISTRADOR" ? [["usuarios", UserCog, "Usuarios"] as const] : [])
   ] as const;
@@ -133,6 +136,7 @@ function App() {
       {view === "compras" && <PurchasesView api={api} canWrite={session.user.rol !== "CONSULTA"} isAdmin={session.user.rol === "ADMINISTRADOR"} />}
       {view === "remitos" && <RemittancesView api={api} canWrite={session.user.rol !== "CONSULTA"} />}
       {view === "balance" && <BalanceView api={api} />}
+      {view === "informes" && <ReportsView api={api} />}
       {view === "stock" && <StockView api={api} isAdmin={session.user.rol === "ADMINISTRADOR"} />}
       {view === "usuarios" && <UsersView api={api} />}
     </section>
@@ -154,7 +158,7 @@ function DashboardView({ api }: { api: ReturnType<typeof useApi> }) {
       <section className="panel"><h2>Ventas vs compras</h2><ResponsiveContainer width="100%" height={260}><BarChart data={data.chart}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="mes" /><YAxis /><Tooltip /><Legend /><Bar dataKey="ventas" fill="#d71920" /><Bar dataKey="compras" fill="#2563eb" /></BarChart></ResponsiveContainer></section>
       <section className="panel"><h2>Stock bajo</h2>{data.stockBajo.length ? data.stockBajo.map((p) => <Row key={p.id} title={p.nombre} meta={`${p.stockActual} / mínimo ${p.stockMinimo}`} />) : <p>Sin alertas.</p>}</section>
     </div>
-    <section className="panel"><h2>Últimos remitos</h2><Table rows={data.ultimosRemitos.map(formatRemitoRow)} cols={[["numero", "Nro"], ["cliente.nombre", "Cliente"], ["totalFmt", "Total"], ["estado", "Estado"]]} /></section>
+    <section className="panel"><h2>Últimas boletas</h2><Table rows={data.ultimosRemitos.map(formatRemitoRow)} cols={[["numero", "Nro"], ["cliente.nombre", "Cliente"], ["totalFmt", "Total"], ["pagoEstado", "Pago"], ["estado", "Estado"]]} /></section>
   </>;
 }
 
@@ -236,6 +240,26 @@ function ProductsView({ api, canWrite, isAdmin }: { api: ReturnType<typeof useAp
       setError(err.message ?? "No se pudo actualizar la categoría");
     }
   }
+  async function increasePrices(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = payload(event.currentTarget);
+    if (!confirmAction("¿Aplicar aumento masivo de precios?")) return;
+    try {
+      const result = await api("/productos/aumentar-precios", {
+        method: "POST",
+        body: JSON.stringify({
+          categoriaId: form.categoriaId || undefined,
+          porcentaje: Number(form.porcentaje),
+          aplicarMayorista: form.aplicarMayorista === "on",
+          aplicarMinorista: form.aplicarMinorista === "on"
+        })
+      });
+      await load();
+      alert(`Precios actualizados: ${result.actualizados}`);
+    } catch (err: any) {
+      setError(err.message ?? "No se pudo aplicar el aumento");
+    }
+  }
   const productRows = products.map((p) => ({ ...p, activoFmt: p.activo ? "Activo" : "Inactivo", costoFmt: money(p.costo), mayoristaFmt: money(p.precioMayorista), minoristaFmt: money(p.precioMinorista) }));
   return <div className="grid two">
     <section className="panel wide">
@@ -250,6 +274,7 @@ function ProductsView({ api, canWrite, isAdmin }: { api: ReturnType<typeof useAp
     <div className="stack">
       {selectedProduct && <ProductDetail product={selectedProduct} categories={categories} canWrite={canWrite} onUpdate={updateProduct} onClose={() => setSelectedProduct(null)} />}
       {isAdmin && <section className="panel"><h2>Categorías</h2><form className="form" onSubmit={createCategory}><input name="nombre" placeholder="Nueva categoría" required /><button>Crear categoría</button></form><form className="form compact-form" onSubmit={updateCategory}><select name="categoriaId" required><option value="">Editar categoría</option>{categories.map((c) => <option value={c.id} key={c.id}>{c.nombre}</option>)}</select><input name="nombre" placeholder="Nuevo nombre" required /><select name="activo"><option value="true">Activa</option><option value="false">Inactiva</option></select><button>Guardar</button></form></section>}
+      {isAdmin && <section className="panel"><h2>Aumento de precios</h2><form className="form" onSubmit={increasePrices}><select name="categoriaId"><option value="">Todos los rubros</option>{categories.filter((c) => c.activo !== false).map((c) => <option value={c.id} key={c.id}>{c.nombre}</option>)}</select><input name="porcentaje" type="number" step="0.01" placeholder="Porcentaje de aumento" required /><label className="check"><input name="aplicarMayorista" type="checkbox" defaultChecked />Mayorista</label><label className="check"><input name="aplicarMinorista" type="checkbox" defaultChecked />Minorista</label><button>Aplicar aumento</button></form></section>}
       {canWrite && <section className="panel"><h2>Nuevo producto</h2><form className="form" onSubmit={create}><ProductFormFields categories={categories} />{error && <p className="error">{error}</p>}<button>Crear producto</button></form></section>}
     </div>
   </div>;
@@ -257,7 +282,7 @@ function ProductsView({ api, canWrite, isAdmin }: { api: ReturnType<typeof useAp
 
 function productBody(form: Record<string, FormDataEntryValue>) {
   return {
-    codigoInterno: String(form.codigoInterno),
+    codigoInterno: String(form.codigoInterno ?? "").trim() || undefined,
     nombre: String(form.nombre),
     categoriaId: String(form.categoriaId),
     precioMayorista: Number(form.precioMayorista),
@@ -270,7 +295,7 @@ function productBody(form: Record<string, FormDataEntryValue>) {
 
 function ProductFormFields({ product, categories }: { product?: Product; categories: any[] }) {
   return <>
-    <input name="codigoInterno" defaultValue={product?.codigoInterno} placeholder="Código" required />
+    <input name="codigoInterno" defaultValue={product?.codigoInterno} placeholder="Código automático" />
     <input name="nombre" defaultValue={product?.nombre} placeholder="Nombre" required />
     <select name="categoriaId" defaultValue={product?.categoriaId ?? product?.categoria?.id ?? ""} required><option value="">Categoría</option>{categories.filter((c) => c.activo !== false || c.id === (product?.categoriaId ?? product?.categoria?.id)).map((c) => <option value={c.id} key={c.id}>{c.nombre}</option>)}</select>
     <input name="precioMayorista" type="number" step="0.01" min="0" defaultValue={product ? Number(product.precioMayorista) : undefined} placeholder="Mayorista" required />
@@ -379,13 +404,13 @@ function ClientDetail({ client, canWrite, canEditBalance, onUpdate, onClose }: {
   return <section className="panel detail-panel client-profile">
     <div className="client-hero"><div><h2>{client.nombre}</h2><span>{client.empresa ?? "Sin empresa registrada"}</span></div><button type="button" className="icon-button" onClick={onClose} title="Cerrar detalle"><X size={18} /></button></div>
     <div className="detail-grid">
-      <Metric label="Saldo pendiente" value={money(client.saldoPendiente)} /><Metric label="Remitos activos" value={String(activeRemitos.length)} /><Metric label="Total remitido" value={money(totalRemitos)} /><Metric label="Último remito" value={lastRemito ? `#${lastRemito.numero}` : "-"} />
+      <Metric label="Saldo pendiente" value={money(client.saldoPendiente)} /><Metric label="Boletas activas" value={String(activeRemitos.length)} /><Metric label="Total vendido" value={money(totalRemitos)} /><Metric label="Última boleta" value={lastRemito ? `#${lastRemito.numero}` : "-"} />
     </div>
     <div className="client-info-grid">
       <InfoItem label="Estado" value={client.activo ? "Activo" : "Inactivo"} /><InfoItem label="Teléfono" value={client.telefono || "-"} /><InfoItem label="Email" value={client.email || "-"} /><InfoItem label="Dirección" value={client.direccion || "-"} />
     </div>
     {canWrite && <form className="form" onSubmit={onUpdate}><h3>Editar cliente</h3><ClientFields client={client} />{canEditBalance && <input name="saldoPendiente" type="number" step="0.01" min="0" defaultValue={Number(client.saldoPendiente)} placeholder="Saldo pendiente" />} {canEditBalance && <select name="activo" defaultValue={String(client.activo)}><option value="true">Activo</option><option value="false">Inactivo</option></select>}<button>Guardar cliente</button></form>}
-    <div><h3>Historial de remitos</h3><Table rows={remitoRows} cols={[["numero", "Nro"], ["fechaCorta", "Fecha"], ["totalFmt", "Total"], ["estado", "Estado"], ["itemsCount", "Ítems"]]} /></div>
+    <div><h3>Historial de boletas</h3><Table rows={remitoRows} cols={[["numero", "Nro"], ["fechaCorta", "Fecha"], ["totalFmt", "Total"], ["pagoEstado", "Pago"], ["estado", "Estado"], ["itemsCount", "Ítems"]]} /></div>
   </section>;
 }
 
@@ -498,17 +523,19 @@ function RemittancesView({ api, canWrite }: { api: ReturnType<typeof useApi>; ca
   const [remitos, setRemitos] = useState<any[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
+  const [vendors, setVendors] = useState<Vendor[]>([]);
   const [selected, setSelected] = useState<any | null>(null);
   const [remitoItems, setRemitoItems] = useState<LineItem[]>([]);
   const [editItems, setEditItems] = useState<LineItem[]>([]);
   const [priceList, setPriceList] = useState<"MAYORISTA" | "MINORISTA">("MAYORISTA");
-  const [filters, setFilters] = useState({ numero: "", clienteId: "", estado: "", fechaDesde: "", fechaHasta: "" });
+  const [filters, setFilters] = useState({ numero: "", clienteId: "", vendedorId: "", estado: "", pagoEstado: "", fechaDesde: "", fechaHasta: "" });
   const [error, setError] = useState("");
   const load = (next = filters) => Promise.all([
     api(`/remitos?${qs({ ...next, pageSize: 100 })}`),
     api("/productos?estado=ACTIVO&pageSize=100"),
-    api("/clientes?pageSize=100")
-  ]).then(([r, p, c]) => { setRemitos(r.items); setProducts(p.items); setClients(c.items); });
+    api("/clientes?pageSize=100"),
+    api("/vendedores?pageSize=100")
+  ]).then(([r, p, c, v]) => { setRemitos(r.items); setProducts(p.items); setClients(c.items); setVendors(v.items); });
   useEffect(() => { load(); }, []);
   async function openRemito(row: any) {
     const full = await api(`/remitos/${row.id}`);
@@ -539,24 +566,34 @@ function RemittancesView({ api, canWrite }: { api: ReturnType<typeof useApi>; ca
     }
   }
   async function cancelRemito(row: any) {
-    if (!confirmAction(`¿Cancelar el remito #${row.numero}? Esta acción restaura el stock y no se puede deshacer.`)) return;
+    if (!confirmAction(`¿Cancelar la boleta #${row.numero}? Esta acción restaura el stock y no se puede deshacer.`)) return;
     try {
       await api(`/remitos/${row.id}/cancelar`, { method: "POST" });
       setSelected(null);
       await load();
     } catch (err: any) {
-      setError(err.message ?? "No se pudo cancelar el remito");
+      setError(err.message ?? "No se pudo cancelar la boleta");
     }
   }
   async function saveEdit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!selected || !editItems.length) return;
+    if (!selected) return;
+    const form = payload(event.currentTarget);
     try {
-      const updated = await api(`/remitos/${selected.id}`, { method: "PUT", body: JSON.stringify({ items: editItems.map((item) => ({ productoId: item.product.id, cantidad: item.cantidad })) }) });
+      const updated = await api(`/remitos/${selected.id}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          vendedorId: form.vendedorId || null,
+          pagoEstado: form.pagoEstado,
+          metodoPago: form.metodoPago || null,
+          montoPagado: Number(form.montoPagado ?? 0),
+          items: editItems.length ? editItems.map((item) => ({ productoId: item.product.id, cantidad: item.cantidad })) : undefined
+        })
+      });
       setSelected(updated);
       await load();
     } catch (err: any) {
-      setError(err.message ?? "No se pudo editar el remito");
+      setError(err.message ?? "No se pudo editar la boleta");
     }
   }
   async function create(event: React.FormEvent<HTMLFormElement>) {
@@ -564,39 +601,55 @@ function RemittancesView({ api, canWrite }: { api: ReturnType<typeof useApi>; ca
     const formEl = event.currentTarget;
     const form = payload(formEl);
     setError("");
-    if (!remitoItems.length) return setError("Agregá al menos un producto al remito.");
+    if (!remitoItems.length) return setError("Agregá al menos un producto a la boleta.");
     try {
-      await api("/remitos", { method: "POST", body: JSON.stringify({ clienteId: form.clienteId, listaPrecios: priceList, fecha: form.fecha, items: remitoItems.map((item) => ({ productoId: item.product.id, cantidad: item.cantidad })) }) });
+      await api("/remitos", {
+        method: "POST",
+        body: JSON.stringify({
+          clienteId: form.clienteId,
+          vendedorId: form.vendedorId || null,
+          listaPrecios: priceList,
+          pagoEstado: form.pagoEstado,
+          metodoPago: form.metodoPago || null,
+          montoPagado: Number(form.montoPagado ?? 0),
+          fecha: form.fecha,
+          items: remitoItems.map((item) => ({ productoId: item.product.id, cantidad: item.cantidad }))
+        })
+      });
       formEl.reset();
       setRemitoItems([]);
       await load();
     } catch (err: any) {
-      setError(err.message ?? "No se pudo crear el remito");
+      setError(err.message ?? "No se pudo crear la boleta");
     }
   }
   const activeClients = clients.filter((x) => x.activo);
+  const activeVendors = vendors.filter((x) => x.activo);
   const total = remitoItems.reduce((sum, item) => sum + item.cantidad * itemPrice(item.product, priceList), 0);
   const remitoRows = remitos.map(formatRemitoRow);
   return <div className="remitos-layout">
     <section className="panel">
-      <h2>Remitos emitidos</h2>
+      <h2>Boletas emitidas</h2>
       <form className="filters filters-wide" onSubmit={(e) => { e.preventDefault(); load(filters); }}>
         <input value={filters.numero} onChange={(e) => setFilters({ ...filters, numero: e.target.value })} placeholder="Nro" />
         <select value={filters.clienteId} onChange={(e) => setFilters({ ...filters, clienteId: e.target.value })}><option value="">Todos los clientes</option>{clients.map((c) => <option value={c.id} key={c.id}>{c.nombre}</option>)}</select>
+        <select value={filters.vendedorId} onChange={(e) => setFilters({ ...filters, vendedorId: e.target.value })}><option value="">Todos los vendedores</option>{vendors.map((v) => <option value={v.id} key={v.id}>{v.nombre}</option>)}</select>
         <select value={filters.estado} onChange={(e) => setFilters({ ...filters, estado: e.target.value })}><option value="">Todos</option><option value="ACTIVO">Activos</option><option value="CANCELADO">Cancelados</option></select>
+        <select value={filters.pagoEstado} onChange={(e) => setFilters({ ...filters, pagoEstado: e.target.value })}><option value="">Todos los pagos</option><option value="PENDIENTE">Pendiente</option><option value="PARCIAL">Parcial</option><option value="PAGADA">Pagada</option></select>
         <input type="date" value={filters.fechaDesde} onChange={(e) => setFilters({ ...filters, fechaDesde: e.target.value })} />
         <input type="date" value={filters.fechaHasta} onChange={(e) => setFilters({ ...filters, fechaHasta: e.target.value })} />
         <button>Filtrar</button>
       </form>
-      <Table rows={remitoRows} cols={[["numero", "Nro"], ["cliente.nombre", "Cliente"], ["fechaCorta", "Fecha"], ["totalFmt", "Total"], ["estado", "Estado"]]} onRowClick={openRemito} actions={(row) => <div className="table-actions"><button type="button" className="secondary" onClick={() => openPdf(row)}>PDF</button>{canWrite && row.estado === "ACTIVO" && <button type="button" className="secondary" onClick={() => cancelRemito(row)}>Cancelar</button>}</div>} />
+      <Table rows={remitoRows} cols={[["numero", "Nro"], ["cliente.nombre", "Cliente"], ["vendedor.nombre", "Vendedor"], ["fechaCorta", "Fecha"], ["totalFmt", "Total"], ["pagadoFmt", "Pagado"], ["pagoEstado", "Pago"], ["estado", "Estado"]]} onRowClick={openRemito} actions={(row) => <div className="table-actions"><button type="button" className="secondary" onClick={() => openPdf(row)}>PDF</button>{canWrite && row.estado === "ACTIVO" && <button type="button" className="secondary" onClick={() => cancelRemito(row)}>Cancelar</button>}</div>} />
     </section>
-    {selected && <section className="panel detail-panel"><div className="detail-head"><div><h2>Remito #{selected.numero}</h2><span>{selected.cliente?.nombre} · {selected.listaPrecios} · {selected.estado}</span></div><button type="button" className="icon-button" onClick={() => setSelected(null)} title="Cerrar detalle"><X size={18} /></button></div><div className="detail-grid"><Metric label="Fecha" value={formatDate(selected.fecha)} /><Metric label="Total" value={money(selected.total)} /><Metric label="Saldo al emitir" value={money(selected.saldoClienteAlEmitir)} /><Metric label="Ítems" value={String(selected.items?.length ?? 0)} /></div><Table rows={(selected.items ?? []).map(formatRemitoItemRow)} cols={[["codigoProducto", "Código"], ["nombreProducto", "Producto"], ["cantidad", "Cantidad"], ["precioFmt", "Unitario"], ["subtotalFmt", "Subtotal"]]} />{canWrite && selected.estado === "ACTIVO" && <form className="form" onSubmit={saveEdit}><h3>Editar ítems</h3><ItemList items={editItems} mode="remito" priceList={selected.listaPrecios} onRemove={(id) => setEditItems((current) => current.filter((item) => item.product.id !== id))} /><div className="add-line"><ProductPicker products={products} name="productoId" form="edit-remito-product" /><input name="cantidad" form="edit-remito-product" type="number" min="1" placeholder="Cantidad" required /><button type="submit" form="edit-remito-product">Agregar</button></div><Metric label="Nuevo total" value={money(editItems.reduce((sum, item) => sum + item.cantidad * itemPrice(item.product, selected.listaPrecios), 0))} /><button>Guardar cambios</button></form>}<form id="edit-remito-product" onSubmit={addEditItem} /></section>}
+    {selected && <section className="panel detail-panel"><div className="detail-head"><div><h2>Boleta #{selected.numero}</h2><span>{selected.cliente?.nombre} · {selected.listaPrecios} · {selected.estado}</span></div><button type="button" className="icon-button" onClick={() => setSelected(null)} title="Cerrar detalle"><X size={18} /></button></div><div className="detail-grid"><Metric label="Fecha" value={formatDate(selected.fecha)} /><Metric label="Total" value={money(selected.total)} /><Metric label="Pagado" value={money(selected.montoPagado)} /><Metric label="Pago" value={selected.pagoEstado} /><Metric label="Vendedor" value={selected.vendedor?.nombre ?? "-"} /><Metric label="Comisión" value={money(selected.vendedor ? Number(selected.total) * Number(selected.vendedor.porcentajeComision) / 100 : 0)} /></div><Table rows={(selected.items ?? []).map(formatRemitoItemRow)} cols={[["codigoProducto", "Código"], ["nombreProducto", "Producto"], ["cantidad", "Cantidad"], ["precioFmt", "Unitario"], ["subtotalFmt", "Subtotal"]]} />{canWrite && selected.estado === "ACTIVO" && <form className="form" onSubmit={saveEdit}><h3>Editar boleta</h3><div className="form-grid"><select name="vendedorId" defaultValue={selected.vendedorId ?? ""}><option value="">Sin vendedor</option>{activeVendors.map((v) => <option value={v.id} key={v.id}>{v.nombre} · {Number(v.porcentajeComision)}%</option>)}</select><select name="pagoEstado" defaultValue={selected.pagoEstado}><option value="PENDIENTE">Pendiente</option><option value="PARCIAL">Parcial</option><option value="PAGADA">Pagada</option></select><select name="metodoPago" defaultValue={selected.metodoPago ?? ""}><option value="">Sin método</option><option value="EFECTIVO">Efectivo</option><option value="TRANSFERENCIA">Transferencia</option><option value="TARJETA">Tarjeta</option><option value="CHEQUE">Cheque</option><option value="OTRO">Otro</option></select><input name="montoPagado" type="number" step="0.01" min="0" defaultValue={Number(selected.montoPagado)} placeholder="Monto pagado" /></div><ItemList items={editItems} mode="remito" priceList={selected.listaPrecios} onRemove={(id) => setEditItems((current) => current.filter((item) => item.product.id !== id))} /><div className="add-line"><ProductPicker products={products} name="productoId" form="edit-remito-product" /><input name="cantidad" form="edit-remito-product" type="number" min="1" placeholder="Cantidad" required /><button type="submit" form="edit-remito-product">Agregar</button></div><Metric label="Nuevo total" value={money(editItems.reduce((sum, item) => sum + item.cantidad * itemPrice(item.product, selected.listaPrecios), 0))} /><button>Guardar cambios</button></form>}<form id="edit-remito-product" onSubmit={addEditItem} /></section>}
     {canWrite && <section className="panel remito-builder">
-      <h2>Crear remito</h2>
+      <h2>Crear boleta</h2>
       <form className="form" onSubmit={create}>
-        <div className="step-block"><span className="step-badge">1</span><div className="form-grid"><select name="clienteId" required><option value="">Elegir cliente</option>{activeClients.map((c) => <option value={c.id} key={c.id}>{c.nombre} · saldo {money(c.saldoPendiente)}</option>)}</select><select value={priceList} onChange={(e) => setPriceList(e.target.value as "MAYORISTA" | "MINORISTA")}><option value="MAYORISTA">Lista mayorista</option><option value="MINORISTA">Lista minorista</option></select><input name="fecha" type="date" defaultValue={dateInput()} required /></div></div>
+        <div className="step-block"><span className="step-badge">1</span><div className="form-grid"><select name="clienteId" required><option value="">Elegir cliente</option>{activeClients.map((c) => <option value={c.id} key={c.id}>{c.nombre} · saldo {money(c.saldoPendiente)}</option>)}</select><select name="vendedorId"><option value="">Sin vendedor</option>{activeVendors.map((v) => <option value={v.id} key={v.id}>{v.nombre} · {Number(v.porcentajeComision)}%</option>)}</select><select value={priceList} onChange={(e) => setPriceList(e.target.value as "MAYORISTA" | "MINORISTA")}><option value="MAYORISTA">Lista mayorista</option><option value="MINORISTA">Lista minorista</option></select><input name="fecha" type="date" defaultValue={dateInput()} required /></div></div>
         <div className="step-block"><span className="step-badge">2</span><div className="add-line"><ProductPicker products={products} name="productoId" form="add-remito-product" /><input name="cantidad" form="add-remito-product" type="number" min="1" placeholder="Cantidad" required /><button type="submit" form="add-remito-product">Agregar</button></div></div>
-        <div className="step-block"><span className="step-badge">3</span><div className="stack"><ItemList items={remitoItems} mode="remito" priceList={priceList} onRemove={(id) => setRemitoItems((current) => current.filter((item) => item.product.id !== id))} /><Metric label="Total remito" value={money(total)} />{error && <p className="error">{error}</p>}<button>Crear remito</button></div></div>
+        <div className="step-block"><span className="step-badge">3</span><div className="form-grid"><select name="pagoEstado" defaultValue="PENDIENTE"><option value="PENDIENTE">Pendiente</option><option value="PARCIAL">Parcial</option><option value="PAGADA">Pagada</option></select><select name="metodoPago"><option value="">Sin método</option><option value="EFECTIVO">Efectivo</option><option value="TRANSFERENCIA">Transferencia</option><option value="TARJETA">Tarjeta</option><option value="CHEQUE">Cheque</option><option value="OTRO">Otro</option></select><input name="montoPagado" type="number" step="0.01" min="0" defaultValue="0" placeholder="Monto pagado" /></div></div>
+        <div className="step-block"><span className="step-badge">4</span><div className="stack"><ItemList items={remitoItems} mode="remito" priceList={priceList} onRemove={(id) => setRemitoItems((current) => current.filter((item) => item.product.id !== id))} /><Metric label="Total boleta" value={money(total)} />{error && <p className="error">{error}</p>}<button>Crear boleta</button></div></div>
       </form>
       <form id="add-remito-product" onSubmit={addBuilderItem} />
     </section>}
@@ -680,6 +733,71 @@ function BalanceView({ api }: { api: ReturnType<typeof useApi> }) {
   return <div className="grid two"><section className="panel wide"><div className="filters"><input type="number" value={year} onChange={(e) => setYear(Number(e.target.value))} /><select value={month} onChange={(e) => setMonth(Number(e.target.value))}>{Array.from({ length: 12 }, (_, i) => <option key={i + 1} value={i + 1}>{new Date(2026, i, 1).toLocaleString("es-AR", { month: "long" })}</option>)}</select><button onClick={load}>Ver período</button></div><div className="metrics"><Metric label="Ventas" value={money(data.ventas)} /><Metric label="Compras" value={money(data.compras)} /><Metric label="Resultado" value={money(data.resultado)} /><Metric label="Valor stock" value={money(data.valorStock)} /></div><h2>Comparativo últimos 6 meses</h2><ResponsiveContainer width="100%" height={320}><BarChart data={dashboard.chart}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="mes" /><YAxis /><Tooltip /><Legend /><Bar dataKey="ventas" fill="#d71920" /><Bar dataKey="compras" fill="#2563eb" /></BarChart></ResponsiveContainer></section></div>;
 }
 
+function ReportsView({ api }: { api: ReturnType<typeof useApi> }) {
+  const now = new Date();
+  const [year, setYear] = useState(now.getFullYear());
+  const [month, setMonth] = useState(now.getMonth() + 1);
+  const [vendors, setVendors] = useState<Vendor[]>([]);
+  const [selectedVendor, setSelectedVendor] = useState<Vendor | null>(null);
+  const [error, setError] = useState("");
+  const loadVendors = () => api("/vendedores?pageSize=100").then((d) => setVendors(d.items));
+  useEffect(() => { loadVendors(); }, []);
+  async function download(kind: string, format: "pdf" | "xlsx") {
+    const blob = await api(`/informes/${kind}?${qs({ year, month, format })}`, { headers: { Accept: format === "pdf" ? "application/pdf" : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" } });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${kind}.${format}`;
+    a.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
+  }
+  async function createVendor(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formEl = event.currentTarget;
+    const form = payload(formEl);
+    try {
+      await api("/vendedores", { method: "POST", body: JSON.stringify({ nombre: form.nombre, porcentajeComision: Number(form.porcentajeComision) }) });
+      formEl.reset();
+      await loadVendors();
+    } catch (err: any) {
+      setError(err.message ?? "No se pudo crear el vendedor");
+    }
+  }
+  async function updateVendor(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedVendor) return;
+    const form = payload(event.currentTarget);
+    try {
+      await api(`/vendedores/${selectedVendor.id}`, { method: "PATCH", body: JSON.stringify({ nombre: form.nombre, porcentajeComision: Number(form.porcentajeComision), activo: form.activo === "true" }) });
+      setSelectedVendor(null);
+      await loadVendors();
+    } catch (err: any) {
+      setError(err.message ?? "No se pudo actualizar el vendedor");
+    }
+  }
+  const reportRows = [
+    ["clientes", "Clientes con saldos"],
+    ["ventas", "Ventas del período"],
+    ["compras", "Compras del período"],
+    ["productos", "Productos y stock"]
+  ];
+  return <div className="grid two">
+    <section className="panel wide">
+      <h2>Informes</h2>
+      <div className="filters">
+        <input type="number" value={year} onChange={(e) => setYear(Number(e.target.value))} />
+        <select value={month} onChange={(e) => setMonth(Number(e.target.value))}>{Array.from({ length: 12 }, (_, i) => <option key={i + 1} value={i + 1}>{new Date(2026, i, 1).toLocaleString("es-AR", { month: "long" })}</option>)}</select>
+      </div>
+      <div className="report-list">{reportRows.map(([kind, label]) => <div className="report-row" key={kind}><strong>{label}</strong><div className="table-actions"><button type="button" className="secondary" onClick={() => download(kind, "pdf")}>PDF</button><button type="button" className="secondary" onClick={() => download(kind, "xlsx")}>Excel</button></div></div>)}</div>
+    </section>
+    <div className="stack">
+      <section className="panel"><h2>Vendedores</h2><Table rows={vendors.map((v) => ({ ...v, comisionFmt: `${Number(v.porcentajeComision)}%`, estadoFmt: v.activo ? "Activo" : "Inactivo" }))} cols={[["nombre", "Nombre"], ["comisionFmt", "Comisión"], ["estadoFmt", "Estado"]]} onRowClick={setSelectedVendor} /></section>
+      {selectedVendor && <section className="panel"><h2>Editar vendedor</h2><form className="form" onSubmit={updateVendor}><input name="nombre" defaultValue={selectedVendor.nombre} required /><input name="porcentajeComision" type="number" step="0.01" min="0" max="100" defaultValue={Number(selectedVendor.porcentajeComision)} required /><select name="activo" defaultValue={String(selectedVendor.activo)}><option value="true">Activo</option><option value="false">Inactivo</option></select><button>Guardar vendedor</button></form></section>}
+      <section className="panel"><h2>Nuevo vendedor</h2><form className="form" onSubmit={createVendor}><input name="nombre" placeholder="Nombre" required /><input name="porcentajeComision" type="number" step="0.01" min="0" max="100" placeholder="% comisión" required />{error && <p className="error">{error}</p>}<button>Crear vendedor</button></form></section>
+    </div>
+  </div>;
+}
+
 function UsersView({ api }: { api: ReturnType<typeof useApi> }) {
   const [users, setUsers] = useState<User[]>([]);
   const [selected, setSelected] = useState<User | null>(null);
@@ -753,7 +871,7 @@ function formatDate(value: string) {
 }
 
 function formatRemitoRow(r: any) {
-  return { ...r, fechaCorta: formatDate(r.fecha), totalFmt: money(r.total), itemsCount: r.items?.length ?? 0 };
+  return { ...r, fechaCorta: formatDate(r.fecha), totalFmt: money(r.total), pagadoFmt: money(r.montoPagado ?? 0), itemsCount: r.items?.length ?? 0 };
 }
 
 function formatRemitoItemRow(item: any) {

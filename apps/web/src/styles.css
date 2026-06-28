@@ -361,6 +361,20 @@ header span { color: var(--muted); }
 .table-actions button {
   padding: 8px 10px;
 }
+.report-list {
+  display: grid;
+  gap: 10px;
+}
+.report-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: #fffefa;
+}
 .movement-list {
   display: grid;
   gap: 10px;
@@ -432,6 +446,10 @@ tr.clickable-row:hover td { background: #fff7d6; }
   .line-item > strong { grid-column: 1 / -1; }
   .movement {
     grid-template-columns: 1fr;
+  }
+  .report-row {
+    align-items: flex-start;
+    flex-direction: column;
   }
   .movement-numbers { text-align: left; }
   header { align-items: flex-start; flex-direction: column; }
