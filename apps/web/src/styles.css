@@ -945,6 +945,12 @@ header span { color: var(--muted); }
   border-radius: 8px;
   background: var(--surface);
 }
+.vendor-detail-modal {
+  width: min(980px, calc(100vw - 28px));
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+  box-shadow: 0 20px 60px #11182745;
+}
 .vendor-detail-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.6fr) minmax(220px, 0.7fr);
