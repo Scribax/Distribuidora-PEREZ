@@ -137,7 +137,7 @@ function App() {
       {view === "productos" && <ProductsView api={api} canWrite={session.user.rol !== "CONSULTA"} isAdmin={session.user.rol === "ADMINISTRADOR"} />}
       {view === "clientes" && <ClientsView api={api} canWrite={session.user.rol !== "CONSULTA"} canEditBalance={session.user.rol === "ADMINISTRADOR"} />}
       {view === "compras" && <PurchasesView api={api} canWrite={session.user.rol !== "CONSULTA"} isAdmin={session.user.rol === "ADMINISTRADOR"} />}
-      {view === "remitos" && <RemittancesView api={api} canWrite={session.user.rol !== "CONSULTA"} />}
+      {view === "remitos" && <RemittancesView api={api} canWrite={session.user.rol !== "CONSULTA"} isAdmin={session.user.rol === "ADMINISTRADOR"} />}
       {view === "gastos" && <ExpensesView api={api} isAdmin={session.user.rol === "ADMINISTRADOR"} />}
       {view === "balance" && <BalanceView api={api} />}
       {view === "informes" && <ReportsView api={api} />}
@@ -578,7 +578,7 @@ function SupplierPicker({ suppliers, value, manualName, onChange, onManualNameCh
   </div>;
 }
 
-function RemittancesView({ api, canWrite }: { api: ReturnType<typeof useApi>; canWrite: boolean }) {
+function RemittancesView({ api, canWrite, isAdmin }: { api: ReturnType<typeof useApi>; canWrite: boolean; isAdmin: boolean }) {
   const [remitos, setRemitos] = useState<any[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
@@ -642,6 +642,16 @@ function RemittancesView({ api, canWrite }: { api: ReturnType<typeof useApi>; ca
       await load();
     } catch (err: any) {
       setError(err.message ?? "No se pudo cancelar la boleta");
+    }
+  }
+  async function deleteRemito(row: any) {
+    if (!confirmAction(`¿Eliminar definitivamente la boleta #${row.numero}? No quedará en el historial. Si estaba activa, se restaurará stock y saldo.`)) return;
+    try {
+      await api(`/remitos/${row.id}`, { method: "DELETE" });
+      setSelected((current: any) => current?.id === row.id ? null : current);
+      await load();
+    } catch (err: any) {
+      setError(err.message ?? "No se pudo eliminar la boleta");
     }
   }
   async function saveEdit(event: React.FormEvent<HTMLFormElement>) {
@@ -753,7 +763,7 @@ function RemittancesView({ api, canWrite }: { api: ReturnType<typeof useApi>; ca
           <input type="date" value={filters.fechaHasta} onChange={(e) => setFilters({ ...filters, fechaHasta: e.target.value })} />
           <button>Filtrar</button>
         </form>
-        <div className="sales-list">{remitoRows.map((row) => <SaleCard key={row.id} row={row} onOpen={openRemito} onPdf={openPdf} onCancel={canWrite && row.estado === "ACTIVO" ? cancelRemito : undefined} />)}{!remitoRows.length && <p className="muted">No hay boletas con estos filtros.</p>}</div>
+        <div className="sales-list">{remitoRows.map((row) => <SaleCard key={row.id} row={row} onOpen={openRemito} onPdf={openPdf} onCancel={canWrite && row.estado === "ACTIVO" ? cancelRemito : undefined} onDelete={isAdmin ? deleteRemito : undefined} />)}{!remitoRows.length && <p className="muted">No hay boletas con estos filtros.</p>}</div>
       </section>
     </section>
     {selected && <RemitoDetail selected={selected} canWrite={canWrite} activeVendors={activeVendors} editItems={editItems} products={products} editProductId={editProductId} savingEdit={savingEdit} editSaved={editSaved} onClose={() => setSelected(null)} onSaveEdit={saveEdit} onMarkPaid={markAsPaid} onEditProductChange={setEditProductId} onEditItemsChange={setEditItems} onAddEditItem={addEditItem} />}
@@ -788,7 +798,7 @@ function remitoItemsFrom(items: any[], products: Product[]) {
   });
 }
 
-function SaleCard({ row, onOpen, onPdf, onCancel }: { row: any; onOpen: (row: any) => void; onPdf: (row: any) => void; onCancel?: (row: any) => void }) {
+function SaleCard({ row, onOpen, onPdf, onCancel, onDelete }: { row: any; onOpen: (row: any) => void; onPdf: (row: any) => void; onCancel?: (row: any) => void; onDelete?: (row: any) => void }) {
   const pending = remitoPending(row);
   const paid = row.pagoEstado === "PAGADA" ? Number(row.total) : Number(row.montoPagado ?? 0);
   return <article className="sale-card">
@@ -798,7 +808,7 @@ function SaleCard({ row, onOpen, onPdf, onCancel }: { row: any; onOpen: (row: an
       <div className="sale-badges"><span className={`status-chip ${String(row.pagoEstado).toLowerCase()}`}>{row.pagoEstado}</span><span className={`status-chip ${String(row.estado).toLowerCase()}`}>{row.estado}</span></div>
       <div className="sale-money"><strong>{row.totalFmt}</strong><span>Pagado {money(paid)} · pendiente {money(pending)}</span></div>
     </button>
-    <div className="sale-actions"><button type="button" className="secondary" onClick={() => onPdf(row)}>PDF</button>{onCancel && <button type="button" className="secondary" onClick={() => onCancel(row)}>Cancelar</button>}</div>
+    <div className="sale-actions"><button type="button" className="secondary" onClick={() => onPdf(row)}>PDF</button>{onCancel && <button type="button" className="secondary" onClick={() => onCancel(row)}>Cancelar</button>}{onDelete && <button type="button" className="danger" onClick={() => onDelete(row)}>Eliminar</button>}</div>
   </article>;
 }
 

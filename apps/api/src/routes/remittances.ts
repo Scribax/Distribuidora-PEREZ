@@ -280,6 +280,39 @@ remittancesRouter.post("/:id/cancelar", requireRoles(Rol.ADMINISTRADOR, Rol.EMPL
   res.status(204).send();
 });
 
+remittancesRouter.delete("/:id", requireRoles(Rol.ADMINISTRADOR), async (req, res) => {
+  const id = String(req.params.id);
+  const remito = await prisma.remito.findUnique({ where: { id }, include: { items: true } });
+  if (!remito) fail(404, "REMITO_NO_ENCONTRADO", "Remito no encontrado");
+
+  await prisma.$transaction(async (tx) => {
+    if (remito.estado === "ACTIVO") {
+      const pendingDebt = remitoPending(Number(remito.total), Number(remito.montoPagado), remito.pagoEstado);
+      if (pendingDebt !== 0) {
+        await tx.cliente.update({
+          where: { id: remito.clienteId },
+          data: { saldoPendiente: { decrement: pendingDebt } }
+        });
+      }
+      for (const item of remito.items) {
+        await adjustProductStock(tx, {
+          productoId: item.productoId,
+          delta: item.cantidad,
+          tipo: "CANCELACION_REMITO",
+          usuarioId: req.user!.id,
+          referenciaId: remito.id,
+          referenciaTipo: "Remito",
+          motivo: "Eliminación definitiva de boleta"
+        });
+      }
+    }
+    await tx.remitoItem.deleteMany({ where: { remitoId: remito.id } });
+    await tx.remito.delete({ where: { id: remito.id } });
+  });
+
+  res.status(204).send();
+});
+
 remittancesRouter.get("/:id/pdf", async (req, res) => {
   const id = String(req.params.id);
   const remito = await prisma.remito.findUnique({
