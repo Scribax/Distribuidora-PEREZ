@@ -314,19 +314,20 @@ remittancesRouter.get("/:id/pdf", async (req, res) => {
   doc.fontSize(10.5).text(remito.vendedor?.nombre ?? "-", left + 382, 116, { width: 130 });
   doc.fontSize(9.5).fillColor("#555555").text(`Pago: ${remito.pagoEstado}${remito.metodoPago ? ` · ${remito.metodoPago}` : ""}`, left + 382, 134, { width: 140 });
 
-  doc.fontSize(9).fillColor("#111111").text(`SALDO DE SU CTA CTE A LA FECHA: ${money(saldoCuentaCorriente)}`, left, 182, { width: pageWidth });
-  doc.moveTo(left, 199).lineTo(right, 199).strokeColor("#d9e2dd").lineWidth(0.8).stroke();
+  doc.roundedRect(left, 176, pageWidth, 28, 4).fillAndStroke("#f7fbf8", "#d9e2dd");
+  doc.fillColor("#496054").fontSize(8).text("SALDO DE SU CTA CTE A LA FECHA", left + 10, 184, { width: 230 });
+  doc.fillColor("#166534").fontSize(13).text(money(saldoCuentaCorriente), right - 170, 182, { width: 160, align: "right" });
 
   const startX = left;
-  let y = 220;
-  doc.fontSize(8.5).fillColor("#496054");
-  doc.text("Código", startX, y, { width: 64 });
-  doc.text("Producto", startX + 72, y, { width: 220 });
+  let y = 222;
+  doc.rect(startX, y - 5, pageWidth, 18).fillAndStroke("#f5f1e8", "#d9e2dd");
+  doc.fontSize(8.3).fillColor("#496054");
+  doc.text("Código", startX + 6, y, { width: 64 });
+  doc.text("Producto", startX + 78, y, { width: 220 });
   doc.text("Cant.", startX + 308, y, { width: 42, align: "right" });
   doc.text("Unit.", startX + 365, y, { width: 76, align: "right" });
   doc.text("Subtotal", startX + 456, y, { width: 76, align: "right" });
-  y += 17;
-  doc.moveTo(startX, y - 4).lineTo(startX + pageWidth, y - 4).strokeColor("#d9e2dd").stroke();
+  y += 21;
   doc.fillColor("#111111").fontSize(8.5);
   for (const item of remito.items) {
     if (y > 326) {
@@ -334,8 +335,8 @@ remittancesRouter.get("/:id/pdf", async (req, res) => {
       break;
     }
     doc.moveTo(startX, y - 4).lineTo(startX + pageWidth, y - 4).strokeColor("#edf1ee").stroke();
-    doc.text(item.codigoProducto, startX, y, { width: 64 });
-    doc.text(item.nombreProducto, startX + 72, y, { width: 220 });
+    doc.text(item.codigoProducto, startX + 6, y, { width: 64 });
+    doc.text(item.nombreProducto, startX + 78, y, { width: 220 });
     doc.text(String(item.cantidad), startX + 308, y, { width: 42, align: "right" });
     doc.text(money(item.precioUnitario), startX + 365, y, { width: 76, align: "right" });
     doc.text(money(item.subtotal), startX + 456, y, { width: 76, align: "right" });
@@ -343,10 +344,14 @@ remittancesRouter.get("/:id/pdf", async (req, res) => {
   }
   doc.moveTo(startX, y).lineTo(startX + pageWidth, y).strokeColor("#d9e2dd").stroke();
   const totalsY = Math.min(y + 10, 334);
-  doc.roundedRect(right - 206, totalsY, 206, 62, 4).strokeColor("#d9e2dd").lineWidth(0.8).stroke();
-  doc.fontSize(9).fillColor("#111111").text(`Subtotal: ${money(remito.subtotal)}`, right - 195, totalsY + 9, { width: 184, align: "right" });
-  doc.text(`Descuento ${Number(remito.descuentoPorcentaje)}%: -${money(discountAmount)}`, right - 195, totalsY + 25, { width: 184, align: "right" });
-  doc.fontSize(15).fillColor("#166534").text(`Total: ${money(remito.total)}`, right - 195, totalsY + 42, { width: 184, align: "right" });
+  doc.roundedRect(right - 218, totalsY, 218, 72, 4).fillAndStroke("#fffefa", "#d9e2dd");
+  doc.fontSize(8.8).fillColor("#555555").text("Subtotal", right - 205, totalsY + 10, { width: 90 });
+  doc.fillColor("#111111").text(money(remito.subtotal), right - 105, totalsY + 10, { width: 92, align: "right" });
+  doc.fillColor("#555555").text(`Descuento ${Number(remito.descuentoPorcentaje)}%`, right - 205, totalsY + 27, { width: 100 });
+  doc.fillColor("#111111").text(`-${money(discountAmount)}`, right - 105, totalsY + 27, { width: 92, align: "right" });
+  doc.moveTo(right - 205, totalsY + 45).lineTo(right - 12, totalsY + 45).strokeColor("#d9e2dd").stroke();
+  doc.fontSize(14).fillColor("#166534").text("Total", right - 205, totalsY + 51, { width: 70 });
+  doc.text(money(remito.total), right - 120, totalsY + 51, { width: 108, align: "right" });
   doc.moveTo(left, 404).lineTo(right, 404).dash(3, { space: 4 }).strokeColor("#b9c7bf").stroke().undash();
   doc.fillColor("#777777").fontSize(7).text("Documento interno sin validez fiscal.", left, 382, { align: "center", width: pageWidth, lineBreak: false });
   doc.end();
