@@ -294,7 +294,7 @@ remittancesRouter.get("/:id/pdf", async (req, res) => {
   doc.pipe(res);
   const money = (value: unknown) => `$${Number(value).toFixed(2)}`;
   const deudaBoleta = remitoPending(Number(remito.total), Number(remito.montoPagado), remito.pagoEstado);
-  const saldoPendienteBoleta = remito.pagoEstado === PagoEstado.PAGADA ? Number(remito.saldoClienteAlEmitir) : Math.max(Number(remito.saldoClienteAlEmitir), deudaBoleta);
+  const saldoCuentaCorriente = Math.max(Number(remito.cliente.saldoPendiente), deudaBoleta);
   const discountAmount = Number(remito.subtotal) - Number(remito.total);
   const pageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
   const left = doc.page.margins.left;
@@ -314,16 +314,11 @@ remittancesRouter.get("/:id/pdf", async (req, res) => {
   doc.fontSize(10.5).text(remito.vendedor?.nombre ?? "-", left + 382, 116, { width: 130 });
   doc.fontSize(9.5).fillColor("#555555").text(`Pago: ${remito.pagoEstado}${remito.metodoPago ? ` · ${remito.metodoPago}` : ""}`, left + 382, 134, { width: 140 });
 
-  doc.roundedRect(left, 178, pageWidth, 44, 4).fillAndStroke("#f7fbf8", "#d9e2dd");
-  doc.fillColor("#166534").fontSize(8).text("SALDO TOTAL DEL CLIENTE", left + 10, 188, { width: 165 });
-  doc.fontSize(12).text(money(saldoPendienteBoleta), left + 10, 200, { width: 165 });
-  doc.fillColor("#555555").fontSize(8).text("ABONADO EN ESTA BOLETA", left + 205, 188, { width: 150 });
-  doc.fillColor("#111111").fontSize(11).text(money(remito.montoPagado), left + 205, 200, { width: 150 });
-  doc.fillColor(deudaBoleta > 0 ? "#991b1b" : "#166534").fontSize(8).text(deudaBoleta > 0 ? "PENDIENTE DE ESTA BOLETA" : "BOLETA SALDADA", left + 390, 188, { width: 135, align: "right" });
-  doc.fontSize(12).text(money(deudaBoleta), left + 390, 200, { width: 135, align: "right" });
+  doc.fontSize(9).fillColor("#111111").text(`SALDO DE SU CTA CTE A LA FECHA: ${money(saldoCuentaCorriente)}`, left, 182, { width: pageWidth });
+  doc.moveTo(left, 199).lineTo(right, 199).strokeColor("#d9e2dd").lineWidth(0.8).stroke();
 
   const startX = left;
-  let y = 244;
+  let y = 220;
   doc.fontSize(8.5).fillColor("#496054");
   doc.text("Código", startX, y, { width: 64 });
   doc.text("Producto", startX + 72, y, { width: 220 });
