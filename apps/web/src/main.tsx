@@ -79,9 +79,11 @@ function Login({ onLogin }: { onLogin: (session: Session) => void }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     setError("");
+    setLoading(true);
     try {
       const res = await fetch(`${API}/auth/login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, password }) });
       if (!res.ok) throw await res.json();
@@ -90,16 +92,30 @@ function Login({ onLogin }: { onLogin: (session: Session) => void }) {
       onLogin(session);
     } catch (err: any) {
       setError(err.message ?? "No se pudo iniciar sesión");
+    } finally {
+      setLoading(false);
     }
   }
   return <main className="login-shell">
     <form className="login-panel" onSubmit={submit}>
-      <strong>PEREZ MARTIN</strong>
-      <h1>Gestión operativa</h1>
-      <label>Email<input value={email} onChange={(e) => setEmail(e.target.value)} /></label>
-      <label>Contraseña<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} /></label>
-      {error && <p className="error">{error}</p>}
-      <button>Ingresar</button>
+      <div className="login-brand">
+        <img src="/brand-logo.png" alt="Perez Martin Distribuidora" />
+        <strong>Perez Martin</strong>
+        <h1>Gestión operativa</h1>
+      </div>
+      <div className="login-form">
+        <div className="login-field">
+          <label htmlFor="login-email">Email</label>
+          <input id="login-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="tu@email.com" required autoFocus autoComplete="username" />
+        </div>
+        <div className="login-field">
+          <label htmlFor="login-password">Contraseña</label>
+          <input id="login-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" required autoComplete="current-password" />
+        </div>
+        {error && <div className="login-error">{error}</div>}
+        <button type="submit" className="login-submit" disabled={loading}>{loading ? "Ingresando..." : "Ingresar"}</button>
+      </div>
+      <div className="login-footer">Sistema de gestión · Distribuidora Perez Martin</div>
     </form>
   </main>;
 }
