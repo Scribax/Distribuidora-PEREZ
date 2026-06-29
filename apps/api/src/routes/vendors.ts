@@ -36,6 +36,32 @@ vendorsRouter.get("/", async (req, res) => {
   });
 });
 
+vendorsRouter.get("/:id", async (req, res) => {
+  const id = String(req.params.id);
+  const vendedor = await prisma.vendedor.findUnique({
+    where: { id },
+    include: {
+      remitos: {
+        where: { estado: "ACTIVO" },
+        include: { cliente: true, items: true },
+        orderBy: { fecha: "desc" },
+        take: 100
+      }
+    }
+  });
+  if (!vendedor) return res.status(404).json({ code: "VENDEDOR_NO_ENCONTRADO", message: "Vendedor no encontrado" });
+  const ventasTotal = vendedor.remitos.reduce((sum, remito) => sum + Number(remito.total), 0);
+  const comisionTotal = ventasTotal * Number(vendedor.porcentajeComision) / 100;
+  const clientes = new Set(vendedor.remitos.map((remito) => remito.clienteId));
+  res.json({
+    ...vendedor,
+    ventasTotal,
+    comisionTotal,
+    boletasTotal: vendedor.remitos.length,
+    clientesTotal: clientes.size
+  });
+});
+
 vendorsRouter.post("/", requireRoles(Rol.ADMINISTRADOR), async (req, res) => {
   const input = vendedorSchema.parse(req.body);
   const vendedor = await prisma.vendedor.create({ data: input });

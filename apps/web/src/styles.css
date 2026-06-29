@@ -936,6 +936,57 @@ header span { color: var(--muted); }
 .vendor-stats strong {
   font-size: 18px;
 }
+.vendor-detail {
+  display: grid;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-left: 5px solid var(--info);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.vendor-detail-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(220px, 0.7fr);
+  gap: 12px;
+  align-items: start;
+}
+.vendor-sales-list,
+.vendor-client-list {
+  display: grid;
+  gap: 8px;
+}
+.vendor-sale-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: var(--bg);
+}
+.vendor-sale-row div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.vendor-sale-row span,
+.vendor-sale-row small {
+  color: var(--muted);
+}
+.vendor-sale-row > div:last-child {
+  text-align: right;
+}
+.mini-chip {
+  display: inline-flex;
+  width: fit-content;
+  padding: 6px 9px;
+  border-radius: 999px;
+  background: var(--secondary);
+  font-size: 13px;
+  font-weight: 800;
+}
 .supplier-card {
   align-items: flex-start;
 }
@@ -1185,6 +1236,13 @@ button:disabled {
     grid-template-columns: 1fr;
   }
   .vendor-stats {
+    text-align: left;
+  }
+  .vendor-detail-grid,
+  .vendor-sale-row {
+    grid-template-columns: 1fr;
+  }
+  .vendor-sale-row > div:last-child {
     text-align: left;
   }
   .expense-row {

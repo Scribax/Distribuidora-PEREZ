@@ -1025,6 +1025,7 @@ function CommercialsView({ api, isAdmin, canWrite }: { api: ReturnType<typeof us
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [tab, setTab] = useState<"vendors" | "suppliers">("vendors");
   const [selectedVendor, setSelectedVendor] = useState<Vendor | null>(null);
+  const [vendorDetail, setVendorDetail] = useState<any | null>(null);
   const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null);
   const [vendorModal, setVendorModal] = useState<"create" | "edit" | null>(null);
   const [supplierModal, setSupplierModal] = useState<"create" | "edit" | null>(null);
@@ -1032,6 +1033,10 @@ function CommercialsView({ api, isAdmin, canWrite }: { api: ReturnType<typeof us
   const loadVendors = () => api("/vendedores?pageSize=100").then((d) => setVendors(d.items));
   const loadSuppliers = () => api("/proveedores?pageSize=100").then((d) => setSuppliers(d.items));
   useEffect(() => { loadVendors(); loadSuppliers(); }, []);
+  async function openVendor(vendor: Vendor) {
+    setError("");
+    setVendorDetail(await api(`/vendedores/${vendor.id}`));
+  }
   async function createVendor(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const formEl = event.currentTarget;
@@ -1096,7 +1101,8 @@ function CommercialsView({ api, isAdmin, canWrite }: { api: ReturnType<typeof us
       <div className="tabs compact-tabs"><button type="button" className={tab === "vendors" ? "active" : ""} onClick={() => setTab("vendors")}>Vendedores</button><button type="button" className={tab === "suppliers" ? "active" : ""} onClick={() => setTab("suppliers")}>Proveedores</button></div>
       {tab === "vendors" && <>
         <div className="section-title"><h3>Vendedores</h3><span>{activeCount} activos · comisiones aplicadas en ventas.</span></div>
-        <div className="vendor-list vendor-list-grid">{vendors.map((vendor) => <button type="button" className="vendor-card vendor-stats-card" key={vendor.id} onClick={() => { setError(""); setSelectedVendor(vendor); setVendorModal("edit"); }}><div><strong>{vendor.nombre}</strong><span>{vendor.activo ? "Activo" : "Inactivo"} · {Number(vendor.porcentajeComision)}% comisión</span></div><div className="vendor-stats"><span>Ventas</span><strong>{money(vendor.ventasTotal ?? 0)}</strong><small>{vendor.boletasTotal ?? 0} boleta{(vendor.boletasTotal ?? 0) === 1 ? "" : "s"} · comisión {money(vendor.comisionTotal ?? 0)}</small></div></button>)}{!vendors.length && <p className="muted">No hay vendedores cargados.</p>}</div>
+        <div className="vendor-list vendor-list-grid">{vendors.map((vendor) => <button type="button" className="vendor-card vendor-stats-card" key={vendor.id} onClick={() => openVendor(vendor)}><div><strong>{vendor.nombre}</strong><span>{vendor.activo ? "Activo" : "Inactivo"} · {Number(vendor.porcentajeComision)}% comisión</span></div><div className="vendor-stats"><span>Ventas</span><strong>{money(vendor.ventasTotal ?? 0)}</strong><small>{vendor.boletasTotal ?? 0} boleta{(vendor.boletasTotal ?? 0) === 1 ? "" : "s"} · comisión {money(vendor.comisionTotal ?? 0)}</small></div></button>)}{!vendors.length && <p className="muted">No hay vendedores cargados.</p>}</div>
+        {vendorDetail && <VendorDetail vendor={vendorDetail} onClose={() => setVendorDetail(null)} onEdit={() => { setSelectedVendor(vendorDetail); setVendorModal("edit"); }} />}
       </>}
       {tab === "suppliers" && <>
         <div className="section-title"><h3>Proveedores</h3><span>{activeSuppliers} activos · disponibles al cargar compras.</span></div>
@@ -1120,6 +1126,35 @@ function supplierPayload(form: Record<string, FormDataEntryValue>) {
     direccion: form.direccion || null,
     observaciones: form.observaciones || null
   };
+}
+
+function VendorDetail({ vendor, onClose, onEdit }: { vendor: any; onClose: () => void; onEdit: () => void }) {
+  const remitos = vendor.remitos ?? [];
+  const clientes = Array.from(new Set(remitos.map((remito: any) => remito.cliente?.nombre).filter(Boolean)));
+  return <section className="vendor-detail">
+    <div className="detail-head">
+      <div><h3>{vendor.nombre}</h3><span>{vendor.activo ? "Activo" : "Inactivo"} · {Number(vendor.porcentajeComision)}% comisión</span></div>
+      <div className="table-actions"><button type="button" className="secondary" onClick={onEdit}>Editar</button><button type="button" className="icon-button" onClick={onClose} title="Cerrar detalle"><X size={18} /></button></div>
+    </div>
+    <div className="detail-grid">
+      <Metric label="Total vendido" value={money(vendor.ventasTotal ?? 0)} />
+      <Metric label="Comisión" value={money(vendor.comisionTotal ?? 0)} />
+      <Metric label="Boletas" value={String(vendor.boletasTotal ?? 0)} />
+      <Metric label="Clientes" value={String(vendor.clientesTotal ?? clientes.length)} />
+    </div>
+    <div className="vendor-detail-grid">
+      <div className="vendor-sales-list">
+        <div className="section-title"><h3>Ventas realizadas</h3><span>Boletas activas asociadas al vendedor.</span></div>
+        {remitos.map((remito: any) => <div className="vendor-sale-row" key={remito.id}><div><strong>Boleta #{remito.numero}</strong><span>{formatDate(remito.fecha)} · {remito.cliente?.nombre ?? "Cliente"}</span><small>{(remito.items ?? []).map((item: any) => `${item.cantidad} x ${item.nombreProducto}`).join(" · ")}</small></div><div><strong>{money(remito.total)}</strong><span>{remito.pagoEstado}</span></div></div>)}
+        {!remitos.length && <p className="muted">Este vendedor todavía no tiene ventas activas.</p>}
+      </div>
+      <div className="vendor-client-list">
+        <div className="section-title"><h3>Clientes atendidos</h3></div>
+        {clientes.map((cliente) => <span className="mini-chip" key={String(cliente)}>{String(cliente)}</span>)}
+        {!clientes.length && <p className="muted">Sin clientes todavía.</p>}
+      </div>
+    </div>
+  </section>;
 }
 
 function VendorModal({ title, vendor, onClose, onSubmit, error }: { title: string; vendor?: Vendor; onClose: () => void; onSubmit: (event: React.FormEvent<HTMLFormElement>) => void; error?: string }) {
