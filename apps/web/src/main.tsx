@@ -877,6 +877,7 @@ function StockView({ api, isAdmin }: { api: ReturnType<typeof useApi>; isAdmin: 
   const [rows, setRows] = useState<any[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [filters, setFilters] = useState({ productoId: "", tipo: "", fechaDesde: "", fechaHasta: "" });
+  const [q, setQ] = useState("");
   const [error, setError] = useState("");
   const load = (next = filters) => Promise.all([
     api(`/stock/movimientos?${qs({ ...next, pageSize: 100 })}`),
@@ -895,22 +896,99 @@ function StockView({ api, isAdmin }: { api: ReturnType<typeof useApi>; isAdmin: 
       setError(err.message ?? "No se pudo ajustar el stock");
     }
   }
-  return <div className="grid two">
-    <section className="panel wide">
-      <form className="filters filters-wide" onSubmit={(e) => { e.preventDefault(); load(filters); }}>
-        <select value={filters.productoId} onChange={(e) => setFilters({ ...filters, productoId: e.target.value })}><option value="">Todos los productos</option>{products.map((p) => <option value={p.id} key={p.id}>{p.nombre}</option>)}</select>
-        <select value={filters.tipo} onChange={(e) => setFilters({ ...filters, tipo: e.target.value })}><option value="">Todos los movimientos</option><option value="COMPRA">Entradas por compra</option><option value="REMITO">Salidas por remito</option><option value="ALTA_PRODUCTO">Stock inicial</option><option value="CANCELACION_REMITO">Cancelaciones</option><option value="ANULACION_COMPRA">Anulación compra</option><option value="AJUSTE_MANUAL">Ajuste manual</option></select>
-        <input type="date" value={filters.fechaDesde} onChange={(e) => setFilters({ ...filters, fechaDesde: e.target.value })} />
-        <input type="date" value={filters.fechaHasta} onChange={(e) => setFilters({ ...filters, fechaHasta: e.target.value })} />
-        <button>Filtrar</button><button type="button" className="secondary" onClick={() => { const clean = { productoId: "", tipo: "", fechaDesde: "", fechaHasta: "" }; setFilters(clean); load(clean); }}>Limpiar</button>
-      </form>
-      <div className="movement-list">{rows.map((row) => <StockMovement key={row.id} row={row} />)}{!rows.length && <p>No hay movimientos para estos filtros.</p>}</div>
+  const movementsByProduct = useMemo(() => {
+    const map = new Map<string, any[]>();
+    rows.forEach((row) => {
+      const current = map.get(row.productoId) ?? [];
+      current.push(row);
+      map.set(row.productoId, current);
+    });
+    return map;
+  }, [rows]);
+  const hasMovementFilters = Boolean(filters.tipo || filters.fechaDesde || filters.fechaHasta);
+  const stockValue = products.reduce((sum, product) => sum + Number(product.costo) * product.stockActual, 0);
+  const searchTerm = q.trim().toLowerCase();
+  const visibleProducts = products
+    .filter((product) => !filters.productoId || product.id === filters.productoId)
+    .filter((product) => {
+      if (!searchTerm) return true;
+      return [product.nombre, product.codigoInterno, product.categoria?.nombre].filter(Boolean).join(" ").toLowerCase().includes(searchTerm);
+    })
+    .filter((product) => !hasMovementFilters || filters.productoId || movementsByProduct.has(product.id));
+  const lowStockCount = products.filter((product) => product.stockActual <= product.stockMinimo).length;
+  return <div className="stock-page">
+    <section className="stock-hero">
+      <div><h2>Stock</h2><span>Control de existencias por producto, movimientos y ajustes.</span></div>
+      <div className="stock-kpis">
+        <Metric label="Productos" value={String(products.length)} />
+        <Metric label="Stock bajo" value={String(lowStockCount)} />
+        <Metric label="Movimientos" value={String(rows.length)} />
+        <Metric label="Valor stock" value={money(stockValue)} />
+      </div>
     </section>
-    <div className="stack">
-      <section className="panel"><h2>Stock actual</h2>{products.map((p) => <Row key={p.id} title={p.nombre} meta={`${p.stockActual} unidades · mínimo ${p.stockMinimo}`} />)}</section>
-      {isAdmin && <section className="panel"><h2>Ajuste manual</h2><form className="form" onSubmit={adjust}><select name="productoId" required><option value="">Producto</option>{products.map((p) => <option value={p.id} key={p.id}>{p.nombre} · actual {p.stockActual}</option>)}</select><input name="cantidadNueva" type="number" min="0" placeholder="Nueva cantidad" required /><input name="motivo" placeholder="Motivo del ajuste" required minLength={10} />{error && <p className="error">{error}</p>}<button>Registrar ajuste</button></form></section>}
+    <div className="stock-layout">
+      <section className="panel wide stock-main-panel">
+        <div className="stock-toolbar">
+          <label className="search-field stock-search">
+            <Search size={16} />
+            <input value={q} onChange={(event) => setQ(event.target.value)} placeholder="Buscar producto, código o rubro" />
+          </label>
+          <form className="stock-filter-bar" onSubmit={(e) => { e.preventDefault(); load(filters); }}>
+            <select value={filters.productoId} onChange={(e) => setFilters({ ...filters, productoId: e.target.value })}><option value="">Todos los productos</option>{products.map((p) => <option value={p.id} key={p.id}>{p.nombre}</option>)}</select>
+            <select value={filters.tipo} onChange={(e) => setFilters({ ...filters, tipo: e.target.value })}><option value="">Todos los movimientos</option><option value="COMPRA">Entradas por compra</option><option value="REMITO">Salidas por remito</option><option value="ALTA_PRODUCTO">Stock inicial</option><option value="CANCELACION_REMITO">Cancelaciones</option><option value="ANULACION_COMPRA">Anulación compra</option><option value="AJUSTE_MANUAL">Ajuste manual</option></select>
+            <input type="date" value={filters.fechaDesde} onChange={(e) => setFilters({ ...filters, fechaDesde: e.target.value })} />
+            <input type="date" value={filters.fechaHasta} onChange={(e) => setFilters({ ...filters, fechaHasta: e.target.value })} />
+            <button>Filtrar</button><button type="button" className="secondary" onClick={() => { const clean = { productoId: "", tipo: "", fechaDesde: "", fechaHasta: "" }; setFilters(clean); setQ(""); load(clean); }}>Limpiar</button>
+          </form>
+        </div>
+        <div className="section-title stock-results-title"><h3>Productos</h3><span>{visibleProducts.length} visibles con los filtros actuales.</span></div>
+        <div className="stock-product-list">{visibleProducts.map((product) => <StockProductCard key={product.id} product={product} movements={movementsByProduct.get(product.id) ?? []} defaultOpen={filters.productoId === product.id} />)}{!visibleProducts.length && <p>No hay productos con movimientos para estos filtros.</p>}</div>
+      </section>
+      {isAdmin && <section className="panel stock-adjust-panel"><div><h2>Ajuste manual</h2><span>Usalo solo para corregir diferencias físicas de stock.</span></div><form className="form" onSubmit={adjust}><select name="productoId" required><option value="">Producto</option>{products.map((p) => <option value={p.id} key={p.id}>{p.nombre} · actual {p.stockActual}</option>)}</select><input name="cantidadNueva" type="number" min="0" placeholder="Nueva cantidad" required /><input name="motivo" placeholder="Motivo del ajuste" required minLength={10} />{error && <p className="error">{error}</p>}<button>Registrar ajuste</button></form></section>}
     </div>
   </div>;
+}
+
+function StockProductCard({ product, movements, defaultOpen }: { product: Product; movements: any[]; defaultOpen: boolean }) {
+  const stockValue = Number(product.costo) * product.stockActual;
+  const latest = movements[0];
+  const isLow = product.stockActual <= product.stockMinimo;
+  const [movementPage, setMovementPage] = useState(1);
+  const movementPageSize = 5;
+  const totalMovementPages = Math.max(1, Math.ceil(movements.length / movementPageSize));
+  const visibleMovements = movements.slice((movementPage - 1) * movementPageSize, movementPage * movementPageSize);
+  const movementRows = visibleMovements.map(formatMovementRow);
+  const movementStart = movements.length ? (movementPage - 1) * movementPageSize + 1 : 0;
+  const movementEnd = Math.min(movementPage * movementPageSize, movements.length);
+  useEffect(() => {
+    setMovementPage(1);
+  }, [product.id, movements.length]);
+
+  return <details className="stock-product-card" open={defaultOpen}>
+    <summary>
+      <div className="stock-product-main">
+        <strong>{product.nombre}</strong>
+        <span>{product.codigoInterno} · {product.categoria?.nombre ?? "Sin rubro"}</span>
+      </div>
+      <div className="stock-product-metrics">
+        <span className={isLow ? "stock-alert" : ""}>Stock {product.stockActual}</span>
+        <span>Mínimo {product.stockMinimo}</span>
+        <span>{money(stockValue)}</span>
+      </div>
+    </summary>
+    <div className="stock-product-body">
+      <div className="stock-movement-head">
+        {latest && <p className="muted">Último movimiento: {formatDate(latest.createdAt)} · {movementLabel(latest.tipo)}</p>}
+        {!!movements.length && <span>{movementStart}-{movementEnd} de {movements.length}</span>}
+      </div>
+      {movementRows.length ? <div className="stock-movement-table"><Table rows={movementRows} cols={[["createdFmt", "Fecha"], ["tipoFmt", "Tipo"], ["cantidad", "Cantidad"], ["stockResultante", "Stock"], ["motivo", "Motivo"]]} /></div> : <p className="muted">Sin movimientos para los filtros elegidos.</p>}
+      {movements.length > movementPageSize && <div className="pager stock-pager">
+        <button type="button" className="secondary" onClick={() => setMovementPage((page) => Math.max(1, page - 1))} disabled={movementPage === 1}>Anterior</button>
+        <span>Página {movementPage} de {totalMovementPages}</span>
+        <button type="button" className="secondary" onClick={() => setMovementPage((page) => Math.min(totalMovementPages, page + 1))} disabled={movementPage === totalMovementPages}>Siguiente</button>
+      </div>}
+    </div>
+  </details>;
 }
 
 function StockMovement({ row }: { row: any }) {
@@ -1037,6 +1115,17 @@ function CommercialsView({ api, isAdmin, canWrite }: { api: ReturnType<typeof us
     setError("");
     setVendorDetail(await api(`/vendedores/${vendor.id}`));
   }
+  async function openVendorRemitoPdf(remito: any) {
+    setError("");
+    try {
+      const blob = await api(`/remitos/${remito.id}/pdf`, { headers: { Accept: "application/pdf" } });
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank", "noopener,noreferrer");
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (err: any) {
+      setError(err.message ?? "No se pudo abrir el PDF");
+    }
+  }
   async function createVendor(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const formEl = event.currentTarget;
@@ -1109,7 +1198,7 @@ function CommercialsView({ api, isAdmin, canWrite }: { api: ReturnType<typeof us
       </>}
     </section>
     {vendorModal === "create" && <VendorModal title="Nuevo vendedor" onClose={() => setVendorModal(null)} onSubmit={createVendor} error={error} />}
-    {vendorDetail && <VendorDetail vendor={vendorDetail} onClose={() => setVendorDetail(null)} onEdit={() => { setSelectedVendor(vendorDetail); setVendorModal("edit"); }} />}
+    {vendorDetail && <VendorDetail vendor={vendorDetail} onClose={() => setVendorDetail(null)} onEdit={() => { setSelectedVendor(vendorDetail); setVendorModal("edit"); }} onPdf={openVendorRemitoPdf} />}
     {vendorModal === "edit" && selectedVendor && <VendorModal title="Editar vendedor" vendor={selectedVendor} onClose={() => { setVendorModal(null); setSelectedVendor(null); }} onSubmit={updateVendor} error={error} />}
     {supplierModal === "create" && <SupplierModal title="Nuevo proveedor" onClose={() => setSupplierModal(null)} onSubmit={createSupplier} error={error} />}
     {supplierModal === "edit" && selectedSupplier && <SupplierModal title="Editar proveedor" supplier={selectedSupplier} canEditStatus={isAdmin} onClose={() => { setSupplierModal(null); setSelectedSupplier(null); }} onSubmit={updateSupplier} error={error} />}
@@ -1128,9 +1217,33 @@ function supplierPayload(form: Record<string, FormDataEntryValue>) {
   };
 }
 
-function VendorDetail({ vendor, onClose, onEdit }: { vendor: any; onClose: () => void; onEdit: () => void }) {
+function VendorDetail({ vendor, onClose, onEdit, onPdf }: { vendor: any; onClose: () => void; onEdit: () => void; onPdf: (remito: any) => void }) {
   const remitos = vendor.remitos ?? [];
   const clientes = Array.from(new Set(remitos.map((remito: any) => remito.cliente?.nombre).filter(Boolean)));
+  const [salesSearch, setSalesSearch] = useState("");
+  const [salesPage, setSalesPage] = useState(1);
+  const pageSize = 6;
+  const filteredRemitos = useMemo(() => {
+    const term = salesSearch.trim().toLowerCase();
+    if (!term) return remitos;
+    return remitos.filter((remito: any) => {
+      const items = (remito.items ?? []).map((item: any) => item.nombreProducto).join(" ");
+      return [
+        `boleta ${remito.numero}`,
+        remito.numero,
+        remito.cliente?.nombre,
+        remito.pagoEstado,
+        formatDate(remito.fecha),
+        items
+      ].filter(Boolean).join(" ").toLowerCase().includes(term);
+    });
+  }, [remitos, salesSearch]);
+  const totalSalesPages = Math.max(1, Math.ceil(filteredRemitos.length / pageSize));
+  const visibleRemitos = filteredRemitos.slice((salesPage - 1) * pageSize, salesPage * pageSize);
+  useEffect(() => {
+    setSalesPage(1);
+  }, [salesSearch, vendor.id]);
+
   return <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label={`Detalle de ${vendor.nombre}`}>
     <section className="vendor-detail vendor-detail-modal">
       <div className="detail-head">
@@ -1145,9 +1258,23 @@ function VendorDetail({ vendor, onClose, onEdit }: { vendor: any; onClose: () =>
       </div>
       <div className="vendor-detail-grid">
         <div className="vendor-sales-list">
-          <div className="section-title"><h3>Ventas realizadas</h3><span>Boletas activas asociadas al vendedor.</span></div>
-          {remitos.map((remito: any) => <div className="vendor-sale-row" key={remito.id}><div><strong>Boleta #{remito.numero}</strong><span>{formatDate(remito.fecha)} · {remito.cliente?.nombre ?? "Cliente"}</span><small>{(remito.items ?? []).map((item: any) => `${item.cantidad} x ${item.nombreProducto}`).join(" · ")}</small></div><div><strong>{money(remito.total)}</strong><span>{remito.pagoEstado}</span></div></div>)}
-          {!remitos.length && <p className="muted">Este vendedor todavía no tiene ventas activas.</p>}
+          <div className="vendor-sales-head">
+            <div className="section-title"><h3>Ventas realizadas</h3><span>{filteredRemitos.length} de {remitos.length} boletas activas.</span></div>
+            <label className="search-field compact-search">
+              <Search size={16} />
+              <input value={salesSearch} onChange={(event) => setSalesSearch(event.target.value)} placeholder="Buscar boleta, cliente o producto" />
+            </label>
+          </div>
+          <div className="vendor-sales-scroll">
+            {visibleRemitos.map((remito: any) => <div className="vendor-sale-row" key={remito.id}><div><strong>Boleta #{remito.numero}</strong><span>{formatDate(remito.fecha)} · {remito.cliente?.nombre ?? "Cliente"}</span><small>{(remito.items ?? []).map((item: any) => `${item.cantidad} x ${item.nombreProducto}`).join(" · ")}</small></div><div className="vendor-sale-side"><strong>{money(remito.total)}</strong><span>{remito.pagoEstado}</span><button type="button" className="secondary tiny-action" onClick={() => onPdf(remito)}>PDF</button></div></div>)}
+            {!remitos.length && <p className="muted">Este vendedor todavía no tiene ventas activas.</p>}
+            {!!remitos.length && !filteredRemitos.length && <p className="muted">No hay ventas que coincidan con la búsqueda.</p>}
+          </div>
+          {filteredRemitos.length > pageSize && <div className="pager">
+            <button type="button" className="secondary" onClick={() => setSalesPage((page) => Math.max(1, page - 1))} disabled={salesPage === 1}>Anterior</button>
+            <span>Página {salesPage} de {totalSalesPages}</span>
+            <button type="button" className="secondary" onClick={() => setSalesPage((page) => Math.min(totalSalesPages, page + 1))} disabled={salesPage === totalSalesPages}>Siguiente</button>
+          </div>}
         </div>
         <div className="vendor-client-list">
           <div className="section-title"><h3>Clientes atendidos</h3></div>
