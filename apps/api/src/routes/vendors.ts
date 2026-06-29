@@ -16,7 +16,24 @@ vendorsRouter.get("/", async (req, res) => {
     prisma.vendedor.findMany({ where, skip, take, orderBy: { nombre: "asc" } }),
     prisma.vendedor.count({ where })
   ]);
-  res.json({ items, total, page, pageSize });
+  const stats = await prisma.remito.groupBy({
+    by: ["vendedorId"],
+    where: { estado: "ACTIVO", vendedorId: { in: items.map((item) => item.id) } },
+    _sum: { total: true },
+    _count: { _all: true }
+  });
+  const statsByVendor = new Map(stats.map((row) => [row.vendedorId, row]));
+  res.json({
+    items: items.map((vendor) => {
+      const row = statsByVendor.get(vendor.id);
+      const ventasTotal = Number(row?._sum.total ?? 0);
+      const comisionTotal = ventasTotal * Number(vendor.porcentajeComision) / 100;
+      return { ...vendor, ventasTotal, boletasTotal: row?._count._all ?? 0, comisionTotal };
+    }),
+    total,
+    page,
+    pageSize
+  });
 });
 
 vendorsRouter.post("/", requireRoles(Rol.ADMINISTRADOR), async (req, res) => {

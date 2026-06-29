@@ -2,20 +2,24 @@
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   color: var(--text);
   background: var(--bg);
-  --bg: #f7f5f0;
-  --surface: #fffdf8;
-  --surface-soft: #fff7d6;
-  --line: #e3ded2;
-  --line-soft: #eee8da;
+  --brand-red: #e21b23;
+  --brand-yellow: #ffe34d;
+  --brand-blue: #1558a8;
+  --bg: #f7f8fb;
+  --surface: #ffffff;
+  --surface-soft: #fff7c8;
+  --line: #d9e1ea;
+  --line-soft: #e9eef5;
   --text: #1f2328;
   --muted: #6f6b61;
-  --sidebar: #1f252e;
-  --sidebar-active: #d71920;
-  --primary: #d71920;
-  --primary-hover: #b9151b;
-  --secondary: #fff0a8;
-  --accent: #f2c94c;
-  --success: #0f766e;
+  --sidebar: #123b70;
+  --sidebar-active: var(--brand-red);
+  --primary: var(--brand-red);
+  --primary-hover: #bd151d;
+  --secondary: #fff2a6;
+  --accent: var(--brand-yellow);
+  --info: var(--brand-blue);
+  --success: #15803d;
   --danger: #b42318;
 }
 * { box-sizing: border-box; }
@@ -71,7 +75,7 @@ label.check input {
   min-height: 100vh;
   display: grid;
   place-items: center;
-  background: linear-gradient(120deg, #f7f5f0 0%, #fff0a8 100%);
+  background: linear-gradient(120deg, #f7f5f0 0%, var(--secondary) 100%);
 }
 .login-panel {
   width: min(420px, calc(100vw - 32px));
@@ -191,7 +195,7 @@ header span { color: var(--muted); }
   align-items: center;
   width: 100%;
   padding: 12px;
-  background: #fffefa;
+  background: var(--surface);
   color: var(--text);
   border: 1px solid var(--line-soft);
   border-radius: 8px;
@@ -320,7 +324,7 @@ header span { color: var(--muted); }
   border: 1px solid var(--line-soft);
   border-left: 6px solid var(--primary);
   border-radius: 8px;
-  background: #fffefa;
+  background: var(--surface);
 }
 .remito-focus-card.paid {
   border-left-color: #16a34a;
@@ -424,7 +428,7 @@ header span { color: var(--muted); }
   border: 1px solid var(--line-soft);
   border-left: 5px solid var(--line);
   border-radius: 8px;
-  background: #fffefa;
+  background: var(--surface);
 }
 .client-remito-card.pending {
   border-left-color: var(--primary);
@@ -470,7 +474,7 @@ header span { color: var(--muted); }
   padding: 12px;
   border: 1px solid var(--line-soft);
   border-radius: 8px;
-  background: #fffefa;
+  background: var(--surface);
   min-width: 0;
 }
 .info-item span {
@@ -536,7 +540,7 @@ header span { color: var(--muted); }
   padding: 12px;
   border: 1px solid var(--line-soft);
   border-radius: 8px;
-  background: #fffefa;
+  background: var(--surface);
 }
 .sale-card:hover {
   border-color: #d6ca93;
@@ -587,7 +591,7 @@ header span { color: var(--muted); }
   min-height: 28px;
   padding: 5px 8px;
   border-radius: 999px;
-  background: #f5f1e8;
+  background: var(--line-soft);
   color: var(--text);
   font-size: 12px;
   font-weight: 800;
@@ -595,10 +599,10 @@ header span { color: var(--muted); }
 .status-chip.pagada,
 .status-chip.activo {
   background: #dff7ea;
-  color: #166534;
+  color: var(--success);
 }
 .status-chip.parcial {
-  background: #fff0a8;
+  background: var(--secondary);
   color: #7a4a00;
 }
 .status-chip.pendiente,
@@ -626,7 +630,7 @@ header span { color: var(--muted); }
   padding: 12px;
   border: 1px solid var(--line-soft);
   border-radius: 8px;
-  background: #fffefa;
+  background: var(--surface);
 }
 .step-badge {
   width: 28px;
@@ -745,7 +749,7 @@ header span { color: var(--muted); }
   border-radius: 8px;
 }
 .picker-trigger:hover {
-  background: #fffefa;
+  background: var(--surface);
   border-color: var(--accent);
 }
 .picker-trigger span {
@@ -855,7 +859,7 @@ header span { color: var(--muted); }
   width: 100%;
   padding: 12px;
   text-align: left;
-  background: #fffefa;
+  background: var(--surface);
   color: var(--text);
   border: 1px solid var(--line-soft);
   border-radius: 8px;
@@ -894,7 +898,7 @@ header span { color: var(--muted); }
   gap: 12px;
   width: 100%;
   padding: 12px;
-  background: #fffefa;
+  background: var(--surface);
   color: var(--text);
   border: 1px solid var(--line-soft);
   border-radius: 8px;
@@ -915,6 +919,22 @@ header span { color: var(--muted); }
 .vendor-card small {
   color: var(--muted);
   overflow-wrap: anywhere;
+}
+.vendor-stats-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(150px, auto);
+}
+.vendor-stats {
+  display: grid;
+  gap: 3px;
+  text-align: right;
+}
+.vendor-stats span {
+  color: var(--info);
+  font-weight: 800;
+}
+.vendor-stats strong {
+  font-size: 18px;
 }
 .supplier-card {
   align-items: flex-start;
@@ -954,7 +974,7 @@ header span { color: var(--muted); }
   padding: 10px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: #fffefa;
+  background: var(--surface);
 }
 .line-item div {
   display: grid;
@@ -988,7 +1008,7 @@ header span { color: var(--muted); }
   padding: 12px;
   border: 1px solid var(--line-soft);
   border-radius: 8px;
-  background: #fffefa;
+  background: var(--surface);
 }
 .movement-list {
   display: grid;
@@ -1007,7 +1027,7 @@ header span { color: var(--muted); }
   border: 1px solid var(--line-soft);
   border-left: 5px solid var(--primary);
   border-radius: 8px;
-  background: #fffefa;
+  background: var(--surface);
 }
 .expense-row div {
   display: grid;
@@ -1027,7 +1047,7 @@ header span { color: var(--muted); }
   border: 1px solid var(--line);
   border-left-width: 5px;
   border-radius: 8px;
-  background: #fffefa;
+  background: var(--surface);
 }
 .movement.in { border-left-color: var(--success); }
 .movement.out { border-left-color: var(--danger); }
@@ -1050,9 +1070,9 @@ th, td {
   font-size: 14px;
   vertical-align: top;
 }
-th { color: var(--muted); font-weight: 700; background: #f5f1e8; }
+th { color: var(--muted); font-weight: 700; background: var(--line-soft); }
 tr.clickable-row { cursor: pointer; }
-tr.clickable-row:hover td { background: #fff7d6; }
+tr.clickable-row:hover td { background: var(--surface-soft); }
 .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .actions a { color: var(--primary); font-weight: 700; }
 .error { color: var(--danger); margin: 0; }
@@ -1161,6 +1181,12 @@ button:disabled {
   .filters, .filters-wide { grid-template-columns: 1fr; }
   .line-item { grid-template-columns: minmax(0, 1fr) 36px; }
   .line-item > strong { grid-column: 1 / -1; }
+  .vendor-stats-card {
+    grid-template-columns: 1fr;
+  }
+  .vendor-stats {
+    text-align: left;
+  }
   .expense-row {
     grid-template-columns: 1fr;
   }
