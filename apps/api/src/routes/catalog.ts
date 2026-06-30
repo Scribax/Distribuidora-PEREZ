@@ -147,6 +147,18 @@ catalogRouter.patch("/productos/:id", requireRoles(Rol.ADMINISTRADOR, Rol.EMPLEA
   res.json(producto);
 });
 
+catalogRouter.delete("/productos/:id", requireRoles(Rol.ADMINISTRADOR), async (req, res) => {
+  const id = String(req.params.id);
+  const current = await prisma.producto.findUnique({ where: { id } });
+  if (!current) fail(404, "PRODUCTO_NO_ENCONTRADO", "Producto no encontrado");
+  if (!current.activo) {
+    res.status(204).send();
+    return;
+  }
+  await prisma.producto.update({ where: { id }, data: { activo: false } });
+  res.status(204).send();
+});
+
 catalogRouter.post("/stock/ajustes", requireRoles(Rol.ADMINISTRADOR), async (req, res) => {
   const { ajusteStockSchema } = await import("../lib/schemas.js");
   const input = ajusteStockSchema.parse(req.body);
