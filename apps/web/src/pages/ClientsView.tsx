@@ -58,6 +58,22 @@ export function ClientsView({ api, canWrite, canEditBalance }: { api: ReturnType
       setError(err.message ?? "No se pudo actualizar el cliente");
     }
   }
+  async function deleteClient(client: Client) {
+    if (!confirmAction(`¿Eliminar definitivamente el cliente ${client.nombre}? Esta acción no se puede deshacer.`)) return;
+    const typedName = window.prompt(`Para confirmar, escribí exactamente el nombre del cliente:\n${client.nombre}`);
+    if (typedName !== client.nombre) {
+      if (typedName !== null) window.alert("El nombre no coincide. No se eliminó el cliente.");
+      return;
+    }
+    if (!confirmAction(`Última confirmación: ¿eliminar definitivamente ${client.nombre}?`)) return;
+    try {
+      await api(`/clientes/${client.id}`, { method: "DELETE" });
+      setSelectedClient(null);
+      await load(q, page);
+    } catch (err: any) {
+      window.alert(err.message ?? "No se pudo eliminar el cliente");
+    }
+  }
   async function openClientRemitoPdf(remito: any) {
     setError("");
     try {
@@ -98,7 +114,7 @@ export function ClientsView({ api, canWrite, canEditBalance }: { api: ReturnType
       <div className="client-list">{clientRows.map((client) => <button type="button" className={`client-card ${selectedClient?.id === client.id ? "active" : ""}`} key={client.id} onClick={() => openClient(client)}><div><strong>{client.nombre}</strong><span>{client.empresa || "Consumidor final"}</span></div><div><span>Saldo</span><strong>{client.saldoFmt}</strong></div><small>{client.estadoFmt}</small></button>)}{!clientRows.length && <p className="muted">No hay clientes con esa búsqueda.</p>}</div>
     </section>
     {selectedClient && <div className="modal-backdrop client-modal-backdrop" role="dialog" aria-modal="true" aria-label={`Cliente ${selectedClient.nombre}`} onClick={() => setSelectedClient(null)}>
-      <ClientDetail client={selectedClient} canWrite={canWrite} canEditBalance={canEditBalance} onUpdate={updateClient} onClose={() => setSelectedClient(null)} onPdf={openClientRemitoPdf} />
+      <ClientDetail client={selectedClient} canWrite={canWrite} canEditBalance={canEditBalance} onUpdate={updateClient} onDelete={deleteClient} onClose={() => setSelectedClient(null)} onPdf={openClientRemitoPdf} />
     </div>}
     {canWrite && <section className="panel"><h2>Nuevo cliente</h2><form className="form client-form" onSubmit={create}><ClientFields />{error && <p className="error">{error}</p>}<button>Crear cliente</button></form></section>}
   </div>;
@@ -127,7 +143,7 @@ function ClientFields({ client }: { client?: Client }) {
   </>;
 }
 
-function ClientDetail({ client, canWrite, canEditBalance, onUpdate, onClose, onPdf }: { client: Client; canWrite: boolean; canEditBalance: boolean; onUpdate: (event: React.FormEvent<HTMLFormElement>) => void; onClose: () => void; onPdf: (row: any) => void }) {
+function ClientDetail({ client, canWrite, canEditBalance, onUpdate, onDelete, onClose, onPdf }: { client: Client; canWrite: boolean; canEditBalance: boolean; onUpdate: (event: React.FormEvent<HTMLFormElement>) => void; onDelete: (client: Client) => void; onClose: () => void; onPdf: (row: any) => void }) {
   const [editing, setEditing] = useState(false);
   const remitos = client.remitos ?? [];
   const activeRemitos = remitos.filter((r) => r.estado === "ACTIVO");
@@ -150,6 +166,7 @@ function ClientDetail({ client, canWrite, canEditBalance, onUpdate, onClose, onP
     </div>
     <div className="client-remittances"><h3>Boletas del cliente</h3><span>Primero aparecen las que tienen saldo pendiente.</span><div className="client-remito-list">{remitoRows.map((row) => <ClientRemitoCard row={row} key={row.id} onPdf={onPdf} />)}{!remitoRows.length && <p className="muted">Este cliente todavía no tiene boletas.</p>}</div></div>
     {canWrite && <div className="client-edit-box"><button type="button" className="secondary" onClick={() => setEditing(true)}>Editar datos del cliente</button></div>}
+    {canEditBalance && <div className="client-danger-zone"><div><strong>Eliminar definitivamente</strong><span>Solo se permite si el cliente no tiene boletas ni historial asociado.</span></div><button type="button" className="danger" onClick={() => onDelete(client)}>Eliminar cliente</button></div>}
     {editing && <ClientEditModal client={client} canEditBalance={canEditBalance} onUpdate={onUpdate} onClose={() => setEditing(false)} />}
   </section>;
 }

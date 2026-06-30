@@ -1,3 +1,5 @@
+import fs from "node:fs/promises";
+import path from "node:path";
 import { Router } from "express";
 import { Prisma, Rol } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
@@ -9,6 +11,18 @@ import { audit, diffFields } from "../lib/audit.js";
 
 export const clientsRouter = Router();
 clientsRouter.use(requireAuth);
+
+const deletedClientsBackupDir = path.resolve(process.cwd(), "backups/clientes-eliminados");
+
+function backupFileName(clientName: string, clientId: string) {
+  const safeName = clientName.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9_-]+/g, "-").replace(/^-|-$/g, "").slice(0, 80) || "cliente";
+  return `${new Date().toISOString().replace(/[:.]/g, "-")}_${safeName}_${clientId}.json`;
+}
+
+function remitoDebt(total: number, montoPagado: number, pagoEstado?: string) {
+  if (pagoEstado === "PAGADA") return 0;
+  return Number(Math.max(total - montoPagado, 0).toFixed(2));
+}
 
 clientsRouter.get("/", async (req, res) => {
   const { skip, take, page, pageSize } = pageArgs(req.query);
@@ -71,4 +85,70 @@ clientsRouter.patch("/:id", requireRoles(Rol.ADMINISTRADOR, Rol.EMPLEADO), async
     cambios: diffFields(before, cliente, ["nombre", "empresa", "direccion", "telefono", "email", "observaciones", "saldoPendiente", "activo"])
   });
   res.json(cliente);
+});
+
+clientsRouter.delete("/:id", requireRoles(Rol.ADMINISTRADOR), async (req, res) => {
+  const id = String(req.params.id);
+  const cliente = await prisma.cliente.findUnique({
+    where: { id },
+    include: {
+      remitos: {
+        include: {
+          items: true,
+          vendedor: true,
+          usuario: { select: { id: true, nombre: true, email: true, rol: true } }
+        },
+        orderBy: { fecha: "desc" }
+      }
+    }
+  });
+  if (!cliente) fail(404, "CLIENTE_NO_ENCONTRADO", "Cliente no encontrado");
+  await fs.mkdir(deletedClientsBackupDir, { recursive: true });
+  const backupPath = path.join(deletedClientsBackupDir, backupFileName(cliente.nombre, cliente.id));
+  await fs.writeFile(backupPath, JSON.stringify({
+    deletedAt: new Date().toISOString(),
+    deletedBy: req.user,
+    warning: "Backup generado automáticamente antes de eliminar definitivamente el cliente.",
+    cliente
+  }, null, 2), "utf8");
+
+  await prisma.$transaction(async (tx) => {
+    for (const remito of cliente.remitos) {
+      if (remito.estado === "ACTIVO") {
+        const pendingDebt = remitoDebt(Number(remito.total), Number(remito.montoPagado), remito.pagoEstado);
+        if (pendingDebt !== 0) {
+          await tx.cliente.update({ where: { id: cliente.id }, data: { saldoPendiente: { decrement: pendingDebt } } });
+        }
+        for (const item of remito.items) {
+          await tx.producto.update({ where: { id: item.productoId }, data: { stockActual: { increment: item.cantidad } } });
+          const producto = await tx.producto.findUnique({ where: { id: item.productoId }, select: { stockActual: true } });
+          await tx.movimientoStock.create({
+            data: {
+              productoId: item.productoId,
+              tipo: "CANCELACION_REMITO",
+              cantidad: item.cantidad,
+              stockResultante: producto?.stockActual ?? item.cantidad,
+              usuarioId: req.user!.id,
+              referenciaId: remito.id,
+              referenciaTipo: "Remito",
+              motivo: `Restauración por eliminación definitiva del cliente ${cliente.nombre}`
+            }
+          });
+        }
+      }
+      await tx.remitoItem.deleteMany({ where: { remitoId: remito.id } });
+    }
+    await tx.remito.deleteMany({ where: { clienteId: cliente.id } });
+    await tx.cliente.delete({ where: { id: cliente.id } });
+    await audit({
+      usuarioId: req.user!.id,
+      modulo: "Clientes",
+      accion: "ELIMINAR",
+      entidad: "Cliente",
+      entidadId: cliente.id,
+      descripcion: `Eliminó definitivamente el cliente ${cliente.nombre}`,
+      cambios: { backupPath, boletasEliminadas: cliente.remitos.length, antes: cliente }
+    }, tx);
+  });
+  res.status(204).send();
 });

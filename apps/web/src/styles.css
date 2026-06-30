@@ -1063,6 +1063,25 @@ header span { color: var(--muted); }
 .client-edit-box > button {
   justify-self: start;
 }
+.client-danger-zone {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid var(--danger-line);
+  border-radius: 8px;
+  background: var(--danger-soft);
+}
+.client-danger-zone div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.client-danger-zone span {
+  color: var(--muted);
+  font-size: 13px;
+}
 .info-item {
   display: grid;
   gap: 6px;
@@ -2182,6 +2201,7 @@ button:disabled {
   .client-profile .detail-grid,
   .client-overview,
   .client-card,
+  .client-danger-zone,
   .client-info-grid,
   .client-remito-card,
   .client-remito-detail,
