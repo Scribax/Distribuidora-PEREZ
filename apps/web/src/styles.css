@@ -422,6 +422,39 @@ header span { color: var(--muted); }
   grid-column: 1 / -1;
   justify-content: end;
 }
+.balance-page {
+  display: grid;
+  gap: 14px;
+  max-width: 1120px;
+}
+.balance-panel {
+  display: grid;
+  gap: 14px;
+  overflow: hidden;
+}
+.balance-filters {
+  grid-template-columns: 120px minmax(180px, 1fr) auto;
+  max-width: 680px;
+}
+.balance-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+.balance-metrics .metric {
+  min-width: 0;
+  padding: 14px 16px;
+}
+.balance-metrics .metric strong {
+  max-width: 100%;
+  font-size: clamp(20px, 2vw, 24px);
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+.balance-chart {
+  min-width: 0;
+  overflow: hidden;
+}
 .reports-page {
   display: grid;
   gap: 14px;
@@ -2208,6 +2241,10 @@ button:disabled {
     flex: 1;
   }
   .form-grid, .add-line, .payment-grid { grid-template-columns: 1fr; }
+  .balance-filters,
+  .balance-metrics {
+    grid-template-columns: 1fr;
+  }
   .expense-form,
   .expense-description,
   .expense-notes {
