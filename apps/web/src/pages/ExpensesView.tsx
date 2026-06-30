@@ -33,7 +33,7 @@ export function ExpensesView({ api, isAdmin }: { api: ReturnType<typeof useApi>;
     await api(`/gastos/${row.id}`, { method: "DELETE" });
     await load();
   }
-  return <div className="grid two">
+  return <div className="expenses-page">
     <section className="panel wide">
       <div className="detail-head"><div><h2>Gastos</h2><span>Salidas de plata que no modifican stock, pero sí bajan la ganancia neta.</span></div><Metric label="Total filtrado" value={money(total)} /></div>
       <form className="filters filters-wide" onSubmit={(e) => { e.preventDefault(); load(filters); }}>
@@ -45,20 +45,19 @@ export function ExpensesView({ api, isAdmin }: { api: ReturnType<typeof useApi>;
       </form>
       <div className="expense-list">{rows.map((row) => <div className="expense-row" key={row.id}><div><strong>{row.descripcion}</strong><span>{formatDate(row.fecha)} · {expenseLabel(row.categoria)} · {row.metodoPago ?? "Sin método"}</span><small>{row.comprobante || row.observaciones || row.usuario?.nombre}</small></div><strong>{money(row.monto)}</strong>{isAdmin && <button type="button" className="icon-button" onClick={() => remove(row)} title="Eliminar gasto"><Trash2 size={16} /></button>}</div>)}{!rows.length && <p className="muted">No hay gastos con estos filtros.</p>}</div>
     </section>
-    <section className="panel">
+    <section className="panel expense-form-panel">
       <h2>Nuevo gasto</h2>
-      <form className="form" onSubmit={create}>
-        <input name="fecha" type="date" defaultValue={dateInput()} required />
-        <select name="categoria" defaultValue="COMBUSTIBLE">{expenseCategories.map((category) => <option key={category} value={category}>{expenseLabel(category)}</option>)}</select>
-        <input name="descripcion" placeholder="Descripción" required />
-        <input name="monto" type="number" step="0.01" min="0.01" placeholder="Monto" required />
-        <select name="metodoPago"><option value="">Sin método</option><option value="EFECTIVO">Efectivo</option><option value="TRANSFERENCIA">Transferencia</option><option value="TARJETA">Tarjeta</option><option value="CHEQUE">Cheque</option><option value="OTRO">Otro</option></select>
-        <input name="comprobante" placeholder="Comprobante o referencia" />
-        <textarea name="observaciones" placeholder="Observaciones" rows={3} />
+      <form className="form expense-form" onSubmit={create}>
+        <label className="field-label"><span>Fecha</span><input name="fecha" type="date" defaultValue={dateInput()} required /></label>
+        <label className="field-label"><span>Categoría</span><select name="categoria" defaultValue="COMBUSTIBLE">{expenseCategories.map((category) => <option key={category} value={category}>{expenseLabel(category)}</option>)}</select></label>
+        <label className="field-label expense-description"><span>Descripción</span><input name="descripcion" placeholder="Ej. Combustible reparto" required /></label>
+        <label className="field-label"><span>Monto</span><input name="monto" type="number" step="0.01" min="0.01" placeholder="0,00" required /></label>
+        <label className="field-label"><span>Método de pago</span><select name="metodoPago"><option value="">Sin método</option><option value="EFECTIVO">Efectivo</option><option value="TRANSFERENCIA">Transferencia</option><option value="TARJETA">Tarjeta</option><option value="CHEQUE">Cheque</option><option value="OTRO">Otro</option></select></label>
+        <label className="field-label"><span>Comprobante</span><input name="comprobante" placeholder="Número o referencia" /></label>
+        <label className="field-label expense-notes"><span>Observaciones</span><textarea name="observaciones" placeholder="Detalle opcional" rows={3} /></label>
         {error && <p className="error">{error}</p>}
         <button>Registrar gasto</button>
       </form>
     </section>
   </div>;
 }
-

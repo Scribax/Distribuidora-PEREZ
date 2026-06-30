@@ -77,15 +77,15 @@ export function PurchasesView({ api, canWrite, isAdmin }: { api: ReturnType<type
           <span className="step-badge">1</span>
           <form id="new-purchase" className="form-grid" onSubmit={create}>
             <SupplierPicker suppliers={suppliers.filter((supplier) => supplier.activo)} value={supplierId} manualName={supplierName} onChange={(supplier) => { setSupplierId(supplier?.id ?? ""); setSupplierName(supplier?.nombre ?? ""); }} onManualNameChange={(value) => { setSupplierName(value); setSupplierId(""); }} />
-            <input name="fecha" type="date" defaultValue={dateInput()} required />
+            <label className="field-label"><span>Fecha de compra</span><input name="fecha" type="date" defaultValue={dateInput()} required /></label>
           </form>
         </div>
         <div className="step-block">
           <span className="step-badge">2</span>
           <div className="purchase-add-line">
             <ProductPicker products={products} name="productoId" form="add-purchase-product" />
-            <input name="cantidad" form="add-purchase-product" type="number" min="1" placeholder="Cantidad" required />
-            <input name="costoUnitario" form="add-purchase-product" type="number" step="0.01" min="0" placeholder="Costo unitario" required />
+            <label className="field-label"><span>Cantidad</span><input name="cantidad" form="add-purchase-product" type="number" min="1" placeholder="Unidades" required /></label>
+            <label className="field-label"><span>Costo unitario</span><input name="costoUnitario" form="add-purchase-product" type="number" step="0.01" min="0" placeholder="0,00" required /></label>
             <label className="check purchase-check"><input name="actualizarCosto" form="add-purchase-product" type="checkbox" defaultChecked />Actualizar costo del producto</label>
             <button type="submit" form="add-purchase-product">Agregar</button>
           </div>
@@ -110,13 +110,13 @@ export function PurchasesView({ api, canWrite, isAdmin }: { api: ReturnType<type
 
 function PurchaseDetail({ purchase, onClose }: { purchase: any; onClose: () => void }) {
   const rows = (purchase.items ?? []).map((item: any) => ({ ...item, productoNombre: item.producto?.nombre ?? "-", costoFmt: money(item.costoUnitario), subtotalFmt: money(item.subtotal), actualizarFmt: item.actualizarCosto ? "Sí" : "No" }));
-  return <div className="detail-panel"><div className="detail-head"><div><h2>{purchase.proveedorNombre}</h2><span>{formatDate(purchase.fecha)} · {purchase.estado}</span></div><button type="button" className="icon-button" onClick={onClose} title="Cerrar detalle"><X size={18} /></button></div><Metric label="Total compra" value={money(purchase.total)} /><Table rows={rows} cols={[["productoNombre", "Producto"], ["cantidad", "Cantidad"], ["costoFmt", "Costo"], ["subtotalFmt", "Subtotal"], ["actualizarFmt", "Actualizó costo"]]} /></div>;
+  return <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label={`Detalle de compra ${purchase.proveedorNombre}`}><section className="purchase-detail-modal"><div className="detail-head"><div><h2>{purchase.proveedorNombre}</h2><span>{formatDate(purchase.fecha)} · {purchase.estado}</span></div><button type="button" className="icon-button" onClick={onClose} title="Cerrar detalle"><X size={18} /></button></div><Metric label="Total compra" value={money(purchase.total)} /><Table rows={rows} cols={[["productoNombre", "Producto"], ["cantidad", "Cantidad"], ["costoFmt", "Costo"], ["subtotalFmt", "Subtotal"], ["actualizarFmt", "Actualizó costo"]]} /></section></div>;
 }
 
 function SupplierPicker({ suppliers, value, manualName, onChange, onManualNameChange }: { suppliers: Supplier[]; value: string; manualName: string; onChange: (supplier: Supplier | null) => void; onManualNameChange: (value: string) => void }) {
   return <div className="supplier-picker">
     <input type="hidden" name="proveedorNombre" value={manualName} required />
     <EntityPicker items={suppliers} value={value} onChange={(id) => onChange(suppliers.find((supplier) => supplier.id === id) ?? null)} title="Elegir proveedor" placeholder="Elegir proveedor cargado" searchPlaceholder="Buscar proveedor, contacto o CUIT" getLabel={(supplier) => supplier.nombre} getMeta={(supplier) => `${supplier.contacto ?? "Sin contacto"} · ${supplier.telefono ?? "sin teléfono"}`} />
-    <input value={manualName} onChange={(event) => onManualNameChange(event.target.value)} placeholder="O escribir proveedor ocasional" required />
+    <label className="field-label"><span>Proveedor ocasional</span><input value={manualName} onChange={(event) => onManualNameChange(event.target.value)} placeholder="Escribir nombre si no está cargado" required /></label>
   </div>;
 }
