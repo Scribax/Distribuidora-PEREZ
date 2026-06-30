@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Search, Trash2, X } from "lucide-react";
 import type { useApi } from "../api";
 import type { Client, LineItem, Product, Supplier, User, Vendor, Dashboard } from "../types";
-import { confirmAction, dateInput, expenseLabel, formatDate, formatMovementRow, formatPurchaseRow, formatRemitoItemRow, formatRemitoRow, itemPrice, money, movementLabel, payload, qs, referenceLabel, remitoPending } from "../utils";
+import { confirmAction, dateInput, expenseLabel, formatDate, formatMovementRow, formatPurchaseRow, formatRemitoItemRow, formatRemitoRow, itemPrice, money, movementLabel, openPdfViewer, payload, qs, referenceLabel, remitoPending } from "../utils";
 import { Metric, Row, Table, SearchBox } from "../components/ui";
 import { EntityPicker, ItemList, ProductPicker } from "../components/pickers";
 
@@ -27,9 +27,7 @@ export function CommercialsView({ api, isAdmin, canWrite }: { api: ReturnType<ty
     setError("");
     try {
       const blob = await api(`/remitos/${remito.id}/pdf`, { headers: { Accept: "application/pdf" } });
-      const url = URL.createObjectURL(blob);
-      window.open(url, "_blank", "noopener,noreferrer");
-      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      openPdfViewer(blob, `Boleta #${remito.numero}`);
     } catch (err: any) {
       setError(err.message ?? "No se pudo abrir el PDF");
     }
@@ -237,4 +235,3 @@ function SupplierModal({ title, supplier, canEditStatus = true, onClose, onSubmi
     </div>
   </div>;
 }
-

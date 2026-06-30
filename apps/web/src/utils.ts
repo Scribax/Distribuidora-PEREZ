@@ -24,6 +24,44 @@ export function payload(form: HTMLFormElement) {
   return Object.fromEntries(new FormData(form));
 }
 
+export function openPdfViewer(blob: Blob, title = "Boleta") {
+  const pdfUrl = URL.createObjectURL(blob);
+  const safeTitle = title.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" })[char] ?? char);
+  const viewer = window.open("", "_blank");
+  if (!viewer) {
+    window.open(pdfUrl, "_blank", "noopener,noreferrer");
+    window.setTimeout(() => URL.revokeObjectURL(pdfUrl), 60_000);
+    return;
+  }
+  viewer.document.write(`<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>${safeTitle}</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #111827; font-family: Inter, Arial, sans-serif; }
+    .toolbar { height: 54px; display: flex; align-items: center; gap: 10px; padding: 0 14px; background: #0f172a; color: white; box-shadow: 0 2px 12px rgba(0,0,0,.25); }
+    .toolbar button { border: 0; border-radius: 8px; background: #e21b23; color: white; padding: 9px 12px; font: inherit; font-weight: 700; cursor: pointer; }
+    .toolbar span { font-weight: 700; }
+    iframe { display: block; width: 100%; height: calc(100% - 54px); border: 0; background: white; }
+    @media print {
+      .toolbar { display: none; }
+      iframe { height: 100%; }
+      html, body { background: white; }
+    }
+  </style>
+</head>
+<body>
+  <div class="toolbar"><button type="button" onclick="history.length > 1 ? history.back() : window.close()">Volver</button><span>${safeTitle}</span></div>
+  <iframe src="${pdfUrl}" title="${safeTitle}"></iframe>
+</body>
+</html>`);
+  viewer.document.close();
+  viewer.addEventListener("beforeunload", () => URL.revokeObjectURL(pdfUrl));
+  window.setTimeout(() => URL.revokeObjectURL(pdfUrl), 600_000);
+}
+
 
 export function itemPrice(product: Product, list: "MAYORISTA" | "MINORISTA") {
   return Number(list === "MAYORISTA" ? product.precioMayorista : product.precioMinorista);
@@ -70,4 +108,3 @@ export function formatPurchaseRow(row: any) {
 export function formatMovementRow(row: any) {
   return { ...row, createdFmt: new Date(row.createdAt).toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" }), tipoFmt: movementLabel(row.tipo) };
 }
-
