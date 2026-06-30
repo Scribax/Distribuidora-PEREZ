@@ -27,6 +27,13 @@ export function payload(form: HTMLFormElement) {
 export function openPdfViewer(blob: Blob, title = "Boleta") {
   const pdfUrl = URL.createObjectURL(blob);
   const safeTitle = title.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" })[char] ?? char);
+  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || window.matchMedia("(max-width: 700px)").matches;
+  if (isMobile) {
+    const viewer = window.open(pdfUrl, "_blank");
+    if (!viewer) window.location.href = pdfUrl;
+    window.setTimeout(() => URL.revokeObjectURL(pdfUrl), 600_000);
+    return;
+  }
   const viewer = window.open("", "_blank");
   if (!viewer) {
     window.open(pdfUrl, "_blank", "noopener,noreferrer");
