@@ -74,7 +74,7 @@ export function RemittancesView({ api, canWrite, isAdmin }: { api: ReturnType<ty
     }
   }
   async function cancelRemito(row: any) {
-    if (!confirmAction(`¿Cancelar la boleta #${row.numero}? Esta acción restaura el stock y no se puede deshacer.`)) return;
+    if (!confirmAction(`¿Anular la boleta #${row.numero}? Va a quedar como cancelada, se restaura el stock y no se puede deshacer.`)) return;
     try {
       await api(`/remitos/${row.id}/cancelar`, { method: "POST" });
       setSelected(null);
@@ -265,7 +265,7 @@ function SaleCard({ row, onOpen, onPdf, onCancel, onDelete }: { row: any; onOpen
       <div className="sale-badges"><span className={`status-chip ${String(row.pagoEstado).toLowerCase()}`}>{row.pagoEstado}</span><span className={`status-chip ${String(row.estado).toLowerCase()}`}>{row.estado}</span></div>
       <div className="sale-money"><strong>{row.totalFmt}</strong><span>Pagado {money(paid)} · pendiente {money(pending)}</span></div>
     </button>
-    <div className="sale-actions"><button type="button" className="secondary" onClick={() => onPdf(row)}>PDF</button>{onCancel && <button type="button" className="secondary" onClick={() => onCancel(row)}>Cancelar</button>}{onDelete && <button type="button" className="danger" onClick={() => onDelete(row)}>Eliminar</button>}</div>
+    <div className="sale-actions"><button type="button" className="secondary" onClick={() => onPdf(row)}>PDF</button>{onCancel && <button type="button" className="secondary" onClick={() => onCancel(row)}>Anular</button>}{onDelete && <button type="button" className="danger" onClick={() => onDelete(row)}>Eliminar</button>}</div>
   </article>;
 }
 

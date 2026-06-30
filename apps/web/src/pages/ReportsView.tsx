@@ -90,18 +90,65 @@ function formatAuditDate(value: string) {
 
 function AuditRow({ row }: { row: any }) {
   const [open, setOpen] = useState(false);
-  const changes = row.cambios && typeof row.cambios === "object" ? Object.entries(row.cambios).filter(([, value]) => value !== null) : [];
+  const changes = auditChangeRows(row.cambios);
   return <article className="audit-row">
     <button type="button" className="audit-main" onClick={() => setOpen(!open)}>
       <div><strong>{row.descripcion}</strong><span>{row.usuario?.nombre ?? "Usuario"} · {formatAuditDate(row.createdAt)}</span></div>
       <div className="audit-tags"><span className="status-chip activo">{row.modulo}</span><span className="status-chip parcial">{auditActionLabel(row.accion)}</span></div>
     </button>
-    {open && <div className="audit-changes">{changes.length ? changes.map(([key, value]: [string, any]) => <div key={key}><strong>{key}</strong><span>{formatAuditChange(value)}</span></div>) : <p className="muted">Sin detalle adicional.</p>}</div>}
+    {open && <div className="audit-changes">{changes.length ? changes.map((change) => <div key={change.key}><strong>{change.label}</strong><span>{change.value}</span></div>) : <p className="muted">Sin detalle adicional.</p>}</div>}
   </article>;
 }
 
-function formatAuditChange(value: any) {
-  if (value && typeof value === "object" && "antes" in value && "despues" in value) return `${String(value.antes ?? "-")} -> ${String(value.despues ?? "-")}`;
-  if (typeof value === "object") return JSON.stringify(value);
+function auditChangeRows(changes: any) {
+  if (!changes || typeof changes !== "object") return [];
+  return Object.entries(changes)
+    .filter(([key, value]) => value !== null && !hiddenAuditKeys.has(key))
+    .map(([key, value]) => ({ key, label: auditFieldLabel(key), value: formatAuditChange(key, value) }))
+    .filter((row) => row.value !== "");
+}
+
+const hiddenAuditKeys = new Set(["antes", "despues", "cliente", "items", "remitos"]);
+
+function auditFieldLabel(key: string) {
+  const labels: Record<string, string> = {
+    activo: "Estado",
+    backupPath: "Backup",
+    boletasEliminadas: "Boletas eliminadas",
+    costo: "Costo",
+    deudaRestada: "Saldo descontado",
+    email: "Email",
+    empresa: "Empresa",
+    estado: "Estado",
+    metodoPago: "Método de pago",
+    montoPagado: "Monto pagado",
+    nombre: "Nombre",
+    observaciones: "Observaciones",
+    pagoEstado: "Estado de cobro",
+    precioMayorista: "Precio mayorista",
+    precioMinorista: "Precio minorista",
+    porcentajeComision: "Comisión",
+    saldoPendiente: "Saldo pendiente",
+    stockActual: "Stock",
+    telefono: "Telefono",
+    total: "Total",
+    vendedorId: "Vendedor"
+  };
+  return labels[key] ?? key.replace(/([A-Z])/g, " $1").replace(/^./, (letter) => letter.toUpperCase());
+}
+
+function formatAuditChange(key: string, value: any): string {
+  if (key === "backupPath") return "Backup guardado para recuperación";
+  if (value && typeof value === "object" && "antes" in value && "despues" in value) return `${formatAuditValue(value.antes)} -> ${formatAuditValue(value.despues)}`;
+  if (Array.isArray(value)) return `${value.length} registros`;
+  if (value && typeof value === "object") return "Detalle guardado internamente";
+  if (key.toLowerCase().includes("path")) return "Guardado";
+  return formatAuditValue(value);
+}
+
+function formatAuditValue(value: any) {
+  if (value === null || value === undefined || value === "") return "-";
+  if (typeof value === "boolean") return value ? "Sí" : "No";
+  if (typeof value === "number") return Number.isFinite(value) ? value.toLocaleString("es-AR") : "-";
   return String(value ?? "-");
 }
