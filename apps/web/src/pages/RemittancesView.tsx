@@ -6,8 +6,12 @@ import { confirmAction, dateInput, expenseLabel, formatDate, formatMovementRow, 
 import { Metric, Row, Table, SearchBox } from "../components/ui";
 import { EntityPicker, ItemList, ProductPicker } from "../components/pickers";
 
+const REMITOS_PAGE_SIZE = 10;
+
 export function RemittancesView({ api, canWrite, isAdmin }: { api: ReturnType<typeof useApi>; canWrite: boolean; isAdmin: boolean }) {
   const [remitos, setRemitos] = useState<any[]>([]);
+  const [page, setPage] = useState(1);
+  const [totalRemitos, setTotalRemitos] = useState(0);
   const [products, setProducts] = useState<Product[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [vendors, setVendors] = useState<Vendor[]>([]);
@@ -24,12 +28,21 @@ export function RemittancesView({ api, canWrite, isAdmin }: { api: ReturnType<ty
   const [error, setError] = useState("");
   const [savingEdit, setSavingEdit] = useState(false);
   const [editSaved, setEditSaved] = useState(false);
-  const load = (next = filters) => Promise.all([
-    api(`/remitos?${qs({ ...next, pageSize: 100 })}`),
+  const load = (next = filters, nextPage = page): Promise<void> => Promise.all([
+    api(`/remitos?${qs({ ...next, page: nextPage, pageSize: REMITOS_PAGE_SIZE })}`),
     api("/productos?estado=ACTIVO&pageSize=100"),
     api("/clientes?pageSize=100"),
     api("/vendedores?pageSize=100")
-  ]).then(([r, p, c, v]) => { setRemitos(r.items); setProducts(p.items); setClients(c.items); setVendors(v.items); });
+  ]).then(([r, p, c, v]) => {
+    const resultTotal = r.total ?? r.items.length;
+    if (!r.items.length && resultTotal > 0 && nextPage > 1) return load(next, nextPage - 1);
+    setRemitos(r.items);
+    setTotalRemitos(resultTotal);
+    setPage(r.page ?? nextPage);
+    setProducts(p.items);
+    setClients(c.items);
+    setVendors(v.items);
+  });
   useEffect(() => { load(); }, []);
   async function openRemito(row: any) {
     setEditSaved(false);
@@ -65,7 +78,7 @@ export function RemittancesView({ api, canWrite, isAdmin }: { api: ReturnType<ty
     try {
       await api(`/remitos/${row.id}/cancelar`, { method: "POST" });
       setSelected(null);
-      await load();
+      await load(filters, page);
     } catch (err: any) {
       setError(err.message ?? "No se pudo cancelar la boleta");
     }
@@ -75,7 +88,7 @@ export function RemittancesView({ api, canWrite, isAdmin }: { api: ReturnType<ty
     try {
       await api(`/remitos/${row.id}`, { method: "DELETE" });
       setSelected((current: any) => current?.id === row.id ? null : current);
-      await load();
+      await load(filters, page);
     } catch (err: any) {
       setError(err.message ?? "No se pudo eliminar la boleta");
     }
@@ -101,7 +114,7 @@ export function RemittancesView({ api, canWrite, isAdmin }: { api: ReturnType<ty
       });
       setSelected(updated);
       setEditSaved(true);
-      await load();
+      await load(filters, page);
     } catch (err: any) {
       setError(err.message ?? "No se pudo editar la boleta");
     } finally {
@@ -120,7 +133,7 @@ export function RemittancesView({ api, canWrite, isAdmin }: { api: ReturnType<ty
         })
       });
       setSelected(updated);
-      await load();
+      await load(filters, page);
     } catch (err: any) {
       setError(err.message ?? "No se pudo marcar como pagada");
     }
@@ -151,7 +164,7 @@ export function RemittancesView({ api, canWrite, isAdmin }: { api: ReturnType<ty
       setDescuentoPorcentaje(0);
       setSelectedClientId("");
       setSelectedVendorId("");
-      await load();
+      await load(filters, 1);
     } catch (err: any) {
       setError(err.message ?? "No se pudo crear la boleta");
     }
@@ -161,6 +174,14 @@ export function RemittancesView({ api, canWrite, isAdmin }: { api: ReturnType<ty
   const subtotal = remitoItems.reduce((sum, item) => sum + item.cantidad * itemPrice(item.product, priceList), 0);
   const total = subtotal * (1 - Math.min(Math.max(descuentoPorcentaje, 0), 100) / 100);
   const remitoRows = remitos.map(formatRemitoRow);
+  const totalPages = Math.max(1, Math.ceil(totalRemitos / REMITOS_PAGE_SIZE));
+  const firstVisible = totalRemitos === 0 ? 0 : (page - 1) * REMITOS_PAGE_SIZE + 1;
+  const lastVisible = Math.min(page * REMITOS_PAGE_SIZE, totalRemitos);
+  const goToPage = (nextPage: number) => {
+    const safePage = Math.min(Math.max(nextPage, 1), totalPages);
+    setPage(safePage);
+    load(filters, safePage);
+  };
   const totals = remitos.reduce((acc, remito) => {
     if (remito.estado === "ACTIVO") {
       acc.total += Number(remito.total);
@@ -172,14 +193,14 @@ export function RemittancesView({ api, canWrite, isAdmin }: { api: ReturnType<ty
   return <div className="remitos-layout">
     <section className="sales-board">
       <div className="sales-summary">
-        <Metric label="Boletas listadas" value={String(remitos.length)} />
-        <Metric label="Total activo" value={money(totals.total)} />
-        <Metric label="Cobrado" value={money(totals.paid)} />
-        <Metric label="Pendiente" value={money(Math.max(totals.pending, 0))} />
+        <Metric label="Boletas encontradas" value={String(totalRemitos)} />
+        <Metric label="Total de esta página" value={money(totals.total)} />
+        <Metric label="Cobrado en página" value={money(totals.paid)} />
+        <Metric label="Pendiente en página" value={money(Math.max(totals.pending, 0))} />
       </div>
       <section className="panel sales-list-panel">
         <div className="detail-head sales-head"><div><h2>Boletas emitidas</h2><span>Buscá, revisá estado y abrí el detalle sin pelearte con una tabla enorme.</span></div>{canWrite && <button type="button" onClick={() => document.getElementById("crear-boleta")?.scrollIntoView({ behavior: "smooth", block: "start" })}>Crear boleta</button>}</div>
-        <form className="filters sales-filters" onSubmit={(e) => { e.preventDefault(); load(filters); }}>
+        <form className="filters sales-filters" onSubmit={(e) => { e.preventDefault(); setPage(1); load(filters, 1); }}>
           <input value={filters.numero} onChange={(e) => setFilters({ ...filters, numero: e.target.value })} placeholder="Nro" />
           <EntityPicker items={clients} value={filters.clienteId} onChange={(value) => setFilters({ ...filters, clienteId: value })} title="Elegir cliente" placeholder="Todos los clientes" searchPlaceholder="Buscar cliente" getLabel={(client) => client.nombre} getMeta={(client) => `${client.direccion ?? "Sin dirección"} · saldo ${money(client.saldoPendiente)}`} />
           <EntityPicker items={vendors} value={filters.vendedorId} onChange={(value) => setFilters({ ...filters, vendedorId: value })} title="Elegir vendedor" placeholder="Todos los vendedores" searchPlaceholder="Buscar vendedor" getLabel={(vendor) => vendor.nombre} getMeta={(vendor) => `${Number(vendor.porcentajeComision)}% comisión`} />
@@ -189,10 +210,20 @@ export function RemittancesView({ api, canWrite, isAdmin }: { api: ReturnType<ty
           <input type="date" value={filters.fechaHasta} onChange={(e) => setFilters({ ...filters, fechaHasta: e.target.value })} />
           <button>Filtrar</button>
         </form>
+        <div className="sales-list-toolbar">
+          <span>{firstVisible}-{lastVisible} de {totalRemitos} boletas</span>
+          <div className="pager compact-pager">
+            <button type="button" className="secondary" onClick={() => goToPage(page - 1)} disabled={page === 1}>Anterior</button>
+            <span>Página {page} de {totalPages}</span>
+            <button type="button" className="secondary" onClick={() => goToPage(page + 1)} disabled={page === totalPages}>Siguiente</button>
+          </div>
+        </div>
         <div className="sales-list">{remitoRows.map((row) => <SaleCard key={row.id} row={row} onOpen={openRemito} onPdf={openPdf} onCancel={canWrite && row.estado === "ACTIVO" ? cancelRemito : undefined} onDelete={isAdmin ? deleteRemito : undefined} />)}{!remitoRows.length && <p className="muted">No hay boletas con estos filtros.</p>}</div>
       </section>
     </section>
-    {selected && <RemitoDetail selected={selected} canWrite={canWrite} activeVendors={activeVendors} editItems={editItems} products={products} editProductId={editProductId} savingEdit={savingEdit} editSaved={editSaved} onClose={() => setSelected(null)} onSaveEdit={saveEdit} onMarkPaid={markAsPaid} onEditProductChange={setEditProductId} onEditItemsChange={setEditItems} onAddEditItem={addEditItem} />}
+    {selected && <div className="modal-backdrop remito-modal-backdrop" role="dialog" aria-modal="true" aria-label={`Boleta ${selected.numero}`} onClick={() => setSelected(null)}>
+      <RemitoDetail selected={selected} canWrite={canWrite} activeVendors={activeVendors} editItems={editItems} products={products} editProductId={editProductId} savingEdit={savingEdit} editSaved={editSaved} onClose={() => setSelected(null)} onSaveEdit={saveEdit} onMarkPaid={markAsPaid} onEditProductChange={setEditProductId} onEditItemsChange={setEditItems} onAddEditItem={addEditItem} />
+    </div>}
     {canWrite && <section className="panel remito-builder" id="crear-boleta">
       <h2>Crear boleta</h2>
       <form className="form" onSubmit={create}>
@@ -239,14 +270,14 @@ function SaleCard({ row, onOpen, onPdf, onCancel, onDelete }: { row: any; onOpen
 }
 
 function RemitoDetail({ selected, canWrite, activeVendors, editItems, products, editProductId, savingEdit, editSaved, onClose, onSaveEdit, onMarkPaid, onEditProductChange, onEditItemsChange, onAddEditItem }: { selected: any; canWrite: boolean; activeVendors: Vendor[]; editItems: LineItem[]; products: Product[]; editProductId: string; savingEdit: boolean; editSaved: boolean; onClose: () => void; onSaveEdit: (event: React.FormEvent<HTMLFormElement>) => void; onMarkPaid: () => void; onEditProductChange: (value: string) => void; onEditItemsChange: React.Dispatch<React.SetStateAction<LineItem[]>>; onAddEditItem: (event: React.FormEvent<HTMLFormElement>) => void }) {
-  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
   const pending = remitoPending(selected);
   const paid = selected.pagoEstado === "PAGADA" ? Number(selected.total) : Number(selected.montoPagado ?? 0);
   const commission = selected.vendedor ? Number(selected.total) * Number(selected.vendedor.porcentajeComision) / 100 : 0;
   const isPaid = selected.pagoEstado === "PAGADA" || pending <= 0;
   const itemCount = selected.items?.reduce((sum: number, item: any) => sum + Number(item.cantidad ?? 0), 0) ?? 0;
   const paymentLabel = selected.metodoPago ? String(selected.metodoPago).replaceAll("_", " ") : "Sin método";
-  return <section className="panel detail-panel remito-detail">
+  return <section className="panel detail-panel remito-detail remito-detail-modal" onClick={(event) => event.stopPropagation()}>
     <div className="detail-head remito-detail-head">
       <div><h2>Boleta #{selected.numero}</h2><span>{selected.cliente?.nombre ?? "Cliente"} · {formatDate(selected.fecha)}</span></div>
       <button type="button" className="icon-button" onClick={onClose} title="Cerrar detalle"><X size={18} /></button>
@@ -277,24 +308,42 @@ function RemitoDetail({ selected, canWrite, activeVendors, editItems, products, 
       <div className="line-items">{(selected.items ?? []).map((item: any) => <div className="line-item" key={item.id ?? item.productoId}><div><strong>{item.nombreProducto}</strong><span>{item.codigoProducto} · cant. {item.cantidad} · unit. {money(item.precioUnitario)}</span></div><strong>{money(item.subtotal)}</strong></div>)}</div>
     </div>
     {canWrite && selected.estado === "ACTIVO" && <div className="client-edit-box">
-      <button type="button" className="secondary compact-toggle" onClick={() => setAdvancedOpen(!advancedOpen)}>{advancedOpen ? "Ocultar edición" : "Editar cobro o productos"}</button>
-      {advancedOpen && <form className="form remito-edit-form" onSubmit={onSaveEdit}>
-        <fieldset disabled={savingEdit}>
-        <div className="payment-grid">
-          <label className="field-card"><span>Vendedor</span><select name="vendedorId" defaultValue={selected.vendedorId ?? ""}><option value="">Sin vendedor</option>{activeVendors.map((v) => <option value={v.id} key={v.id}>{v.nombre} · {Number(v.porcentajeComision)}%</option>)}</select><small>Para calcular comisión.</small></label>
-          <label className="field-card"><span>Estado del pago</span><select name="pagoEstado" defaultValue={selected.pagoEstado}><option value="PENDIENTE">Pendiente</option><option value="PARCIAL">Parcial</option><option value="PAGADA">Pagada</option></select><small>Seguimiento de deuda.</small></label>
-          <label className="field-card"><span>Método</span><select name="metodoPago" defaultValue={selected.metodoPago ?? ""}><option value="">Sin método</option><option value="EFECTIVO">Efectivo</option><option value="TRANSFERENCIA">Transferencia</option><option value="TARJETA">Tarjeta</option><option value="CHEQUE">Cheque</option><option value="OTRO">Otro</option></select><small>Opcional.</small></label>
-          <label className="field-card"><span>Monto pagado</span><input name="montoPagado" type="number" step="0.01" min="0" defaultValue={Number(selected.montoPagado)} /><small>Total: {money(selected.total)}</small></label>
-          <label className="field-card"><span>Descuento</span><input name="descuentoPorcentaje" type="number" step="0.01" min="0" max="100" defaultValue={Number(selected.descuentoPorcentaje ?? 0)} /><small>Porcentaje.</small></label>
-        </div>
-        <ItemList items={editItems} mode="remito" priceList={selected.listaPrecios} onRemove={(id) => onEditItemsChange((current) => current.filter((item) => item.product.id !== id))} />
-        <div className="add-line"><ProductPicker products={products} name="productoId" form="edit-remito-product" value={editProductId} onChange={onEditProductChange} /><input name="cantidad" form="edit-remito-product" type="number" min="1" placeholder="Cantidad" required /><button type="submit" form="edit-remito-product">Agregar</button></div>
-        <Metric label="Nuevo subtotal" value={money(editItems.reduce((sum, item) => sum + item.cantidad * itemPrice(item.product, selected.listaPrecios), 0))} />
-        {editSaved && <p className="success">Cambios guardados correctamente.</p>}
-        <button disabled={savingEdit}>{savingEdit ? "Guardando cambios..." : "Guardar cambios"}</button>
-        </fieldset>
-      </form>}
-      <form id="edit-remito-product" onSubmit={onAddEditItem} />
+      <button type="button" className="secondary compact-toggle" onClick={() => setEditOpen(true)}>Editar cobro o productos</button>
     </div>}
+    {editOpen && <RemitoEditModal selected={selected} activeVendors={activeVendors} editItems={editItems} products={products} editProductId={editProductId} savingEdit={savingEdit} editSaved={editSaved} onClose={() => setEditOpen(false)} onSaveEdit={onSaveEdit} onEditProductChange={onEditProductChange} onEditItemsChange={onEditItemsChange} onAddEditItem={onAddEditItem} />}
   </section>;
+}
+
+function RemitoEditModal({ selected, activeVendors, editItems, products, editProductId, savingEdit, editSaved, onClose, onSaveEdit, onEditProductChange, onEditItemsChange, onAddEditItem }: { selected: any; activeVendors: Vendor[]; editItems: LineItem[]; products: Product[]; editProductId: string; savingEdit: boolean; editSaved: boolean; onClose: () => void; onSaveEdit: (event: React.FormEvent<HTMLFormElement>) => void; onEditProductChange: (value: string) => void; onEditItemsChange: React.Dispatch<React.SetStateAction<LineItem[]>>; onAddEditItem: (event: React.FormEvent<HTMLFormElement>) => void }) {
+  const subtotal = editItems.reduce((sum, item) => sum + item.cantidad * itemPrice(item.product, selected.listaPrecios), 0);
+  return <div className="modal-backdrop remito-edit-backdrop" role="dialog" aria-modal="true" aria-label={`Editar boleta ${selected.numero}`} onClick={onClose}>
+    <section className="remito-edit-modal" onClick={(event) => event.stopPropagation()}>
+      <div className="detail-head remito-detail-head">
+        <div><h2>Editar boleta #{selected.numero}</h2><span>{selected.cliente?.nombre ?? "Cliente"} · {formatDate(selected.fecha)}</span></div>
+        <button type="button" className="icon-button" onClick={onClose} title="Cerrar edición"><X size={18} /></button>
+      </div>
+      <form className="form remito-edit-form" onSubmit={onSaveEdit}>
+        <fieldset disabled={savingEdit}>
+          <div className="payment-grid remito-edit-payment">
+            <label className="field-card"><span>Vendedor</span><select name="vendedorId" defaultValue={selected.vendedorId ?? ""}><option value="">Sin vendedor</option>{activeVendors.map((v) => <option value={v.id} key={v.id}>{v.nombre} · {Number(v.porcentajeComision)}%</option>)}</select><small>Para calcular comisión.</small></label>
+            <label className="field-card"><span>Estado del pago</span><select name="pagoEstado" defaultValue={selected.pagoEstado}><option value="PENDIENTE">Pendiente</option><option value="PARCIAL">Parcial</option><option value="PAGADA">Pagada</option></select><small>Seguimiento de deuda.</small></label>
+            <label className="field-card"><span>Método</span><select name="metodoPago" defaultValue={selected.metodoPago ?? ""}><option value="">Sin método</option><option value="EFECTIVO">Efectivo</option><option value="TRANSFERENCIA">Transferencia</option><option value="TARJETA">Tarjeta</option><option value="CHEQUE">Cheque</option><option value="OTRO">Otro</option></select><small>Opcional.</small></label>
+            <label className="field-card"><span>Monto pagado</span><input name="montoPagado" type="number" step="0.01" min="0" defaultValue={Number(selected.montoPagado)} /><small>Total: {money(selected.total)}</small></label>
+            <label className="field-card"><span>Descuento</span><input name="descuentoPorcentaje" type="number" step="0.01" min="0" max="100" defaultValue={Number(selected.descuentoPorcentaje ?? 0)} /><small>Porcentaje.</small></label>
+          </div>
+          <div className="remito-edit-products">
+            <div className="section-title"><h3>Productos</h3><span>Nuevo subtotal {money(subtotal)}</span></div>
+            <ItemList items={editItems} mode="remito" priceList={selected.listaPrecios} onRemove={(id) => onEditItemsChange((current) => current.filter((item) => item.product.id !== id))} />
+            <div className="add-line"><ProductPicker products={products} name="productoId" form="edit-remito-product" value={editProductId} onChange={onEditProductChange} /><input name="cantidad" form="edit-remito-product" type="number" min="1" placeholder="Cantidad" required /><button type="submit" form="edit-remito-product">Agregar</button></div>
+          </div>
+          {editSaved && <p className="success">Cambios guardados correctamente.</p>}
+          <div className="modal-actions remito-edit-actions">
+            <button type="button" className="secondary" onClick={onClose}>Cancelar</button>
+            <button disabled={savingEdit}>{savingEdit ? "Guardando cambios..." : "Guardar cambios"}</button>
+          </div>
+        </fieldset>
+      </form>
+      <form id="edit-remito-product" onSubmit={onAddEditItem} />
+    </section>
+  </div>;
 }
