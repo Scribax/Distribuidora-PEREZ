@@ -6,12 +6,22 @@ import { confirmAction, dateInput, expenseLabel, formatDate, formatMovementRow, 
 import { Metric, Row, Table, SearchBox } from "../components/ui";
 import { EntityPicker, ItemList, ProductPicker } from "../components/pickers";
 
+const CLIENTS_PAGE_SIZE = 10;
+
 export function ClientsView({ api, canWrite, canEditBalance }: { api: ReturnType<typeof useApi>; canWrite: boolean; canEditBalance: boolean }) {
   const [clients, setClients] = useState<Client[]>([]);
+  const [page, setPage] = useState(1);
+  const [totalClients, setTotalClients] = useState(0);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [q, setQ] = useState("");
   const [error, setError] = useState("");
-  const load = (term = q) => api(`/clientes?${qs({ q: term, pageSize: 100 })}`).then((d) => setClients(d.items));
+  const load = (term = q, nextPage = page): Promise<void> => api(`/clientes?${qs({ q: term, page: nextPage, pageSize: CLIENTS_PAGE_SIZE })}`).then((d) => {
+    const resultTotal = d.total ?? d.items.length;
+    if (!d.items.length && resultTotal > 0 && nextPage > 1) return load(term, nextPage - 1);
+    setClients(d.items);
+    setTotalClients(resultTotal);
+    setPage(d.page ?? nextPage);
+  });
   useEffect(() => { load(); }, []);
   async function openClient(client: Client) {
     setSelectedClient(await api(`/clientes/${client.id}`));
@@ -26,7 +36,7 @@ export function ClientsView({ api, canWrite, canEditBalance }: { api: ReturnType
     try {
       await api("/clientes", { method: "POST", body: JSON.stringify(clientBody(payload(formEl))) });
       formEl.reset();
-      await load();
+      await load(q, 1);
     } catch (err: any) {
       setError(err.message ?? "No se pudo crear el cliente");
     }
@@ -42,7 +52,7 @@ export function ClientsView({ api, canWrite, canEditBalance }: { api: ReturnType
     }
     try {
       await api(`/clientes/${selectedClient.id}`, { method: "PATCH", body: JSON.stringify(body) });
-      await load();
+      await load(q, page);
       await reloadSelected(selectedClient.id);
     } catch (err: any) {
       setError(err.message ?? "No se pudo actualizar el cliente");
@@ -60,18 +70,36 @@ export function ClientsView({ api, canWrite, canEditBalance }: { api: ReturnType
   const clientRows = clients.map((client) => ({ ...client, saldoFmt: money(client.saldoPendiente), estadoFmt: client.activo ? "Activo" : "Inactivo" }));
   const totalSaldo = clients.reduce((sum, client) => sum + Number(client.saldoPendiente), 0);
   const activeCount = clients.filter((client) => client.activo).length;
+  const totalPages = Math.max(1, Math.ceil(totalClients / CLIENTS_PAGE_SIZE));
+  const firstVisible = totalClients === 0 ? 0 : (page - 1) * CLIENTS_PAGE_SIZE + 1;
+  const lastVisible = Math.min(page * CLIENTS_PAGE_SIZE, totalClients);
+  const goToPage = (nextPage: number) => {
+    const safePage = Math.min(Math.max(nextPage, 1), totalPages);
+    setPage(safePage);
+    load(q, safePage);
+  };
   return <div className="client-page">
     <section className="client-overview">
-      <Metric label="Clientes" value={String(clients.length)} />
-      <Metric label="Activos" value={String(activeCount)} />
-      <Metric label="Saldo total" value={money(totalSaldo)} />
+      <Metric label="Clientes encontrados" value={String(totalClients)} />
+      <Metric label="Activos en página" value={String(activeCount)} />
+      <Metric label="Saldo en página" value={money(totalSaldo)} />
     </section>
     <section className="panel wide client-list-panel">
       <div className="detail-head"><div><h2>Clientes</h2><span>Seleccioná un cliente para ver saldo, datos y boletas pendientes.</span></div></div>
-      <SearchBox q={q} setQ={setQ} onSearch={(e) => { e?.preventDefault(); load(q); }} onClear={() => { setQ(""); load(""); }} placeholder="Buscar por nombre, empresa o email" />
+      <SearchBox q={q} setQ={setQ} onSearch={(e) => { e?.preventDefault(); setPage(1); load(q, 1); }} onClear={() => { setQ(""); setPage(1); load("", 1); }} placeholder="Buscar por nombre, empresa o email" />
+      <div className="client-list-toolbar">
+        <span>{firstVisible}-{lastVisible} de {totalClients} clientes</span>
+        <div className="pager compact-pager">
+          <button type="button" className="secondary" onClick={() => goToPage(page - 1)} disabled={page === 1}>Anterior</button>
+          <span>Página {page} de {totalPages}</span>
+          <button type="button" className="secondary" onClick={() => goToPage(page + 1)} disabled={page === totalPages}>Siguiente</button>
+        </div>
+      </div>
       <div className="client-list">{clientRows.map((client) => <button type="button" className={`client-card ${selectedClient?.id === client.id ? "active" : ""}`} key={client.id} onClick={() => openClient(client)}><div><strong>{client.nombre}</strong><span>{client.empresa || "Consumidor final"}</span></div><div><span>Saldo</span><strong>{client.saldoFmt}</strong></div><small>{client.estadoFmt}</small></button>)}{!clientRows.length && <p className="muted">No hay clientes con esa búsqueda.</p>}</div>
     </section>
-    {selectedClient && <ClientDetail client={selectedClient} canWrite={canWrite} canEditBalance={canEditBalance} onUpdate={updateClient} onClose={() => setSelectedClient(null)} onPdf={openClientRemitoPdf} />}
+    {selectedClient && <div className="modal-backdrop client-modal-backdrop" role="dialog" aria-modal="true" aria-label={`Cliente ${selectedClient.nombre}`} onClick={() => setSelectedClient(null)}>
+      <ClientDetail client={selectedClient} canWrite={canWrite} canEditBalance={canEditBalance} onUpdate={updateClient} onClose={() => setSelectedClient(null)} onPdf={openClientRemitoPdf} />
+    </div>}
     {canWrite && <section className="panel"><h2>Nuevo cliente</h2><form className="form client-form" onSubmit={create}><ClientFields />{error && <p className="error">{error}</p>}<button>Crear cliente</button></form></section>}
   </div>;
 }
@@ -90,12 +118,12 @@ function clientBody(form: Record<string, FormDataEntryValue>) {
 
 function ClientFields({ client }: { client?: Client }) {
   return <>
-    <input name="nombre" defaultValue={client?.nombre} placeholder="Nombre" required />
-    <input name="empresa" defaultValue={client?.empresa ?? ""} placeholder="Empresa" />
-    <input name="telefono" defaultValue={client?.telefono ?? ""} placeholder="Teléfono" />
-    <input name="email" type="email" defaultValue={client?.email ?? ""} placeholder="Email" />
-    <input name="direccion" defaultValue={client?.direccion ?? ""} placeholder="Dirección" />
-    <input name="observaciones" defaultValue={client?.observaciones ?? ""} placeholder="Observaciones" />
+    <label className="field-label"><span>Nombre del cliente</span><input name="nombre" defaultValue={client?.nombre} placeholder="Ej: Oscar Catalan" required /></label>
+    <label className="field-label"><span>Empresa o comercio</span><input name="empresa" defaultValue={client?.empresa ?? ""} placeholder="Ej: Kiosco Centro" /></label>
+    <label className="field-label"><span>Teléfono</span><input name="telefono" defaultValue={client?.telefono ?? ""} placeholder="Ej: 2604555555" /></label>
+    <label className="field-label"><span>Email</span><input name="email" type="email" defaultValue={client?.email ?? ""} placeholder="Ej: cliente@email.com" /></label>
+    <label className="field-label"><span>Dirección</span><input name="direccion" defaultValue={client?.direccion ?? ""} placeholder="Calle, número, barrio" /></label>
+    <label className="field-label"><span>Observaciones</span><input name="observaciones" defaultValue={client?.observaciones ?? ""} placeholder="Notas internas del cliente" /></label>
   </>;
 }
 
@@ -112,7 +140,7 @@ function ClientDetail({ client, canWrite, canEditBalance, onUpdate, onClose, onP
     return Number(b.numero) - Number(a.numero);
   }).map(formatRemitoRow);
   const pendingRemitos = activeRemitos.filter((r) => remitoPending(r) > 0);
-  return <section className="panel detail-panel client-profile">
+  return <section className="panel detail-panel client-profile client-detail-modal" onClick={(event) => event.stopPropagation()}>
     <div className="client-hero"><div><h2>{client.nombre}</h2><span>{client.empresa ?? "Sin empresa registrada"}</span></div><button type="button" className="icon-button" onClick={onClose} title="Cerrar detalle"><X size={18} /></button></div>
     <div className="detail-grid">
       <Metric label="Saldo pendiente" value={money(client.saldoPendiente)} /><Metric label="Boletas con deuda" value={String(pendingRemitos.length)} /><Metric label="Total vendido" value={money(totalRemitos)} /><Metric label="Última boleta" value={lastRemito ? `#${lastRemito.numero}` : "-"} />
@@ -121,8 +149,29 @@ function ClientDetail({ client, canWrite, canEditBalance, onUpdate, onClose, onP
       <InfoItem label="Estado" value={client.activo ? "Activo" : "Inactivo"} /><InfoItem label="Teléfono" value={client.telefono || "-"} /><InfoItem label="Email" value={client.email || "-"} /><InfoItem label="Dirección" value={client.direccion || "-"} />
     </div>
     <div className="client-remittances"><h3>Boletas del cliente</h3><span>Primero aparecen las que tienen saldo pendiente.</span><div className="client-remito-list">{remitoRows.map((row) => <ClientRemitoCard row={row} key={row.id} onPdf={onPdf} />)}{!remitoRows.length && <p className="muted">Este cliente todavía no tiene boletas.</p>}</div></div>
-    {canWrite && <div className="client-edit-box"><button type="button" className="secondary" onClick={() => setEditing(!editing)}>{editing ? "Ocultar edición" : "Editar datos del cliente"}</button>{editing && <form className="form" onSubmit={onUpdate}><h3>Editar cliente</h3><ClientFields client={client} />{canEditBalance && <input name="saldoPendiente" type="number" step="0.01" min="0" defaultValue={Number(client.saldoPendiente)} placeholder="Saldo pendiente" />} {canEditBalance && <select name="activo" defaultValue={String(client.activo)}><option value="true">Activo</option><option value="false">Inactivo</option></select>}<button>Guardar cliente</button></form>}</div>}
+    {canWrite && <div className="client-edit-box"><button type="button" className="secondary" onClick={() => setEditing(true)}>Editar datos del cliente</button></div>}
+    {editing && <ClientEditModal client={client} canEditBalance={canEditBalance} onUpdate={onUpdate} onClose={() => setEditing(false)} />}
   </section>;
+}
+
+function ClientEditModal({ client, canEditBalance, onUpdate, onClose }: { client: Client; canEditBalance: boolean; onUpdate: (event: React.FormEvent<HTMLFormElement>) => void; onClose: () => void }) {
+  return <div className="modal-backdrop client-edit-backdrop" role="dialog" aria-modal="true" aria-label={`Editar cliente ${client.nombre}`} onClick={onClose}>
+    <section className="client-edit-modal" onClick={(event) => event.stopPropagation()}>
+      <div className="detail-head">
+        <div><h2>Editar cliente</h2><span>{client.nombre}</span></div>
+        <button type="button" className="icon-button" onClick={onClose} title="Cerrar edición"><X size={18} /></button>
+      </div>
+      <form className="form client-edit-form" onSubmit={onUpdate}>
+        <ClientFields client={client} />
+        {canEditBalance && <label className="field-label"><span>Saldo pendiente</span><input name="saldoPendiente" type="number" step="0.01" min="0" defaultValue={Number(client.saldoPendiente)} placeholder="0,00" /></label>}
+        {canEditBalance && <label className="field-label"><span>Estado del cliente</span><select name="activo" defaultValue={String(client.activo)}><option value="true">Activo</option><option value="false">Inactivo</option></select></label>}
+        <div className="modal-actions client-edit-actions">
+          <button type="button" className="secondary" onClick={onClose}>Cancelar</button>
+          <button>Guardar cliente</button>
+        </div>
+      </form>
+    </section>
+  </div>;
 }
 
 function ClientRemitoCard({ row, onPdf }: { row: any; onPdf: (row: any) => void }) {

@@ -4,6 +4,7 @@ import { prisma } from "../lib/prisma.js";
 import { vendedorSchema } from "../lib/schemas.js";
 import { pageArgs } from "../lib/validation.js";
 import { requireAuth, requireRoles } from "../middleware/auth.js";
+import { audit, diffFields } from "../lib/audit.js";
 
 export const vendorsRouter = Router();
 vendorsRouter.use(requireAuth);
@@ -65,11 +66,30 @@ vendorsRouter.get("/:id", async (req, res) => {
 vendorsRouter.post("/", requireRoles(Rol.ADMINISTRADOR), async (req, res) => {
   const input = vendedorSchema.parse(req.body);
   const vendedor = await prisma.vendedor.create({ data: input });
+  await audit({
+    usuarioId: req.user!.id,
+    modulo: "Comerciales",
+    accion: "CREAR",
+    entidad: "Vendedor",
+    entidadId: vendedor.id,
+    descripcion: `Creó el vendedor ${vendedor.nombre}`,
+    cambios: { despues: vendedor }
+  });
   res.status(201).json(vendedor);
 });
 
 vendorsRouter.patch("/:id", requireRoles(Rol.ADMINISTRADOR), async (req, res) => {
   const input = vendedorSchema.partial().parse(req.body);
+  const before = await prisma.vendedor.findUnique({ where: { id: String(req.params.id) } });
   const vendedor = await prisma.vendedor.update({ where: { id: String(req.params.id) }, data: input });
+  await audit({
+    usuarioId: req.user!.id,
+    modulo: "Comerciales",
+    accion: "EDITAR",
+    entidad: "Vendedor",
+    entidadId: vendedor.id,
+    descripcion: `Editó el vendedor ${vendedor.nombre}`,
+    cambios: diffFields(before, vendedor, ["nombre", "porcentajeComision", "activo"])
+  });
   res.json(vendedor);
 });

@@ -196,3 +196,32 @@ reportsRouter.get("/productos", async (req, res) => {
     { header: "Estado", key: "estado", width: 14 }
   ], rows, format);
 });
+
+reportsRouter.get("/auditoria", async (req, res) => {
+  const { page, pageSize, skip, take } = await import("../lib/validation.js").then(({ pageArgs }) => pageArgs(req.query));
+  const modulo = String(req.query.modulo ?? "");
+  const accion = String(req.query.accion ?? "");
+  const usuarioId = String(req.query.usuarioId ?? "");
+  const entidad = String(req.query.entidad ?? "");
+  const fechaDesde = req.query.fechaDesde ? new Date(String(req.query.fechaDesde)) : undefined;
+  const fechaHasta = req.query.fechaHasta ? new Date(String(req.query.fechaHasta)) : undefined;
+  const where = {
+    modulo: modulo || undefined,
+    accion: accion || undefined,
+    usuarioId: usuarioId || undefined,
+    entidad: entidad || undefined,
+    createdAt: fechaDesde || fechaHasta ? { gte: fechaDesde, lte: fechaHasta } : undefined
+  };
+  const [items, total, users] = await Promise.all([
+    prisma.auditLog.findMany({
+      where,
+      skip,
+      take,
+      include: { usuario: { select: { nombre: true, email: true, rol: true } } },
+      orderBy: { createdAt: "desc" }
+    }),
+    prisma.auditLog.count({ where }),
+    prisma.user.findMany({ select: { id: true, nombre: true, email: true }, orderBy: { nombre: "asc" } })
+  ]);
+  res.json({ items, total, page, pageSize, users });
+});

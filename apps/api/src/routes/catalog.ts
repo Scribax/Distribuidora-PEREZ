@@ -6,6 +6,7 @@ import { aumentoPreciosSchema, categoriaSchema, productoSchema, productoUpdateSc
 import { pageArgs } from "../lib/validation.js";
 import { requireAuth, requireRoles } from "../middleware/auth.js";
 import { adjustProductStock } from "../lib/stock.js";
+import { audit, diffFields } from "../lib/audit.js";
 
 export const catalogRouter = Router();
 catalogRouter.use(requireAuth);
@@ -27,6 +28,15 @@ catalogRouter.post("/categorias", requireRoles(Rol.ADMINISTRADOR), async (req, r
   const input = categoriaSchema.parse(req.body);
   try {
     const categoria = await prisma.categoria.create({ data: input });
+    await audit({
+      usuarioId: req.user!.id,
+      modulo: "Productos",
+      accion: "CREAR",
+      entidad: "Categoría",
+      entidadId: categoria.id,
+      descripcion: `Creó la categoría ${categoria.nombre}`,
+      cambios: { despues: categoria }
+    });
     res.status(201).json(categoria);
   } catch {
     fail(422, "CATEGORIA_DUPLICADA", "La categoría ya existe");
@@ -36,7 +46,18 @@ catalogRouter.post("/categorias", requireRoles(Rol.ADMINISTRADOR), async (req, r
 catalogRouter.patch("/categorias/:id", requireRoles(Rol.ADMINISTRADOR), async (req, res) => {
   const id = String(req.params.id);
   const input = categoriaSchema.partial().parse(req.body);
-  res.json(await prisma.categoria.update({ where: { id }, data: input }));
+  const before = await prisma.categoria.findUnique({ where: { id } });
+  const categoria = await prisma.categoria.update({ where: { id }, data: input });
+  await audit({
+    usuarioId: req.user!.id,
+    modulo: "Productos",
+    accion: "EDITAR",
+    entidad: "Categoría",
+    entidadId: categoria.id,
+    descripcion: `Editó la categoría ${categoria.nombre}`,
+    cambios: diffFields(before, categoria, ["nombre", "activo"])
+  });
+  res.json(categoria);
 });
 
 catalogRouter.get("/productos", async (req, res) => {
@@ -88,6 +109,15 @@ catalogRouter.post("/productos", requireRoles(Rol.ADMINISTRADOR, Rol.EMPLEADO), 
           }
         });
       }
+      await audit({
+        usuarioId: req.user!.id,
+        modulo: "Productos",
+        accion: "CREAR",
+        entidad: "Producto",
+        entidadId: created.id,
+        descripcion: `Creó el producto ${created.nombre}`,
+        cambios: { despues: created }
+      }, tx);
       return created;
     });
     res.status(201).json(producto);
@@ -113,6 +143,14 @@ catalogRouter.post("/productos/aumentar-precios", requireRoles(Rol.ADMINISTRADOR
       precioMinorista: input.aplicarMinorista ? Number(producto.precioMinorista) * factor : undefined
     }
   })));
+  await audit({
+    usuarioId: req.user!.id,
+    modulo: "Productos",
+    accion: "AUMENTAR_PRECIOS",
+    entidad: "Producto",
+    descripcion: `Aplicó aumento de precios del ${input.porcentaje}% a ${productos.length} producto${productos.length === 1 ? "" : "s"}`,
+    cambios: { porcentaje: input.porcentaje, categoriaId: input.categoriaId || null, aplicarMayorista: input.aplicarMayorista, aplicarMinorista: input.aplicarMinorista, productos: productos.length }
+  });
   res.json({ actualizados: productos.length });
 });
 
@@ -142,6 +180,15 @@ catalogRouter.patch("/productos/:id", requireRoles(Rol.ADMINISTRADOR, Rol.EMPLEA
         motivo: "Ajuste desde edición de producto"
       });
     }
+    await audit({
+      usuarioId: req.user!.id,
+      modulo: "Productos",
+      accion: "EDITAR",
+      entidad: "Producto",
+      entidadId: updated.id,
+      descripcion: `Editó el producto ${updated.nombre}`,
+      cambios: diffFields(current, { ...updated, stockActual: input.stockActual ?? current.stockActual }, ["codigoInterno", "nombre", "categoriaId", "precioMayorista", "precioMinorista", "costo", "stockActual", "stockMinimo", "activo"])
+    }, tx);
     return updated;
   });
   res.json(producto);
@@ -155,7 +202,16 @@ catalogRouter.delete("/productos/:id", requireRoles(Rol.ADMINISTRADOR), async (r
     res.status(204).send();
     return;
   }
-  await prisma.producto.update({ where: { id }, data: { activo: false } });
+  const producto = await prisma.producto.update({ where: { id }, data: { activo: false } });
+  await audit({
+    usuarioId: req.user!.id,
+    modulo: "Productos",
+    accion: "DESACTIVAR",
+    entidad: "Producto",
+    entidadId: producto.id,
+    descripcion: `Desactivó el producto ${producto.nombre}`,
+    cambios: diffFields(current, producto, ["activo"])
+  });
   res.status(204).send();
 });
 
@@ -164,13 +220,24 @@ catalogRouter.post("/stock/ajustes", requireRoles(Rol.ADMINISTRADOR), async (req
   const input = ajusteStockSchema.parse(req.body);
   const producto = await prisma.producto.findUnique({ where: { id: input.productoId } });
   if (!producto) fail(404, "PRODUCTO_NO_ENCONTRADO", "Producto no encontrado");
-  await prisma.$transaction((tx) => adjustProductStock(tx, {
-    productoId: input.productoId,
-    delta: input.cantidadNueva - producto.stockActual,
-    tipo: "AJUSTE_MANUAL",
-    usuarioId: req.user!.id,
-    motivo: input.motivo
-  }));
+  await prisma.$transaction(async (tx) => {
+    await adjustProductStock(tx, {
+      productoId: input.productoId,
+      delta: input.cantidadNueva - producto.stockActual,
+      tipo: "AJUSTE_MANUAL",
+      usuarioId: req.user!.id,
+      motivo: input.motivo
+    });
+    await audit({
+      usuarioId: req.user!.id,
+      modulo: "Stock",
+      accion: "AJUSTAR_STOCK",
+      entidad: "Producto",
+      entidadId: producto.id,
+      descripcion: `Ajustó stock de ${producto.nombre} de ${producto.stockActual} a ${input.cantidadNueva}`,
+      cambios: { stockActual: { antes: producto.stockActual, despues: input.cantidadNueva }, motivo: input.motivo }
+    }, tx);
+  });
   res.status(204).send();
 });
 

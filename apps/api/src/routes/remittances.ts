@@ -9,6 +9,7 @@ import { remitoSchema, remitoUpdateSchema } from "../lib/schemas.js";
 import { pageArgs } from "../lib/validation.js";
 import { requireAuth, requireRoles } from "../middleware/auth.js";
 import { adjustProductStock, aggregateItems, ensureActiveProducts } from "../lib/stock.js";
+import { audit, diffFields } from "../lib/audit.js";
 
 export const remittancesRouter = Router();
 remittancesRouter.use(requireAuth);
@@ -152,6 +153,15 @@ remittancesRouter.post("/", requireRoles(Rol.ADMINISTRADOR, Rol.EMPLEADO), async
         referenciaTipo: "Remito"
       });
     }
+    await audit({
+      usuarioId: req.user!.id,
+      modulo: "Ventas",
+      accion: "CREAR",
+      entidad: "Boleta",
+      entidadId: created.id,
+      descripcion: `Emitió boleta #${created.numero} para ${created.cliente.nombre}`,
+      cambios: { despues: created, deudaAgregada: pendingDebt }
+    }, tx);
     return created;
   });
   res.status(201).json(remito);
@@ -232,7 +242,7 @@ remittancesRouter.put("/:id", requireRoles(Rol.ADMINISTRADOR, Rol.EMPLEADO), asy
         data: { saldoPendiente: { increment: debtDelta } }
       });
     }
-    return tx.remito.update({
+    const updated = await tx.remito.update({
       where: { id: remito.id },
       data: {
         total,
@@ -246,6 +256,20 @@ remittancesRouter.put("/:id", requireRoles(Rol.ADMINISTRADOR, Rol.EMPLEADO), asy
       },
       include: { items: true, cliente: true, vendedor: true }
     });
+    await audit({
+      usuarioId: req.user!.id,
+      modulo: "Ventas",
+      accion: "EDITAR",
+      entidad: "Boleta",
+      entidadId: updated.id,
+      descripcion: `Editó boleta #${updated.numero}`,
+      cambios: {
+        ...diffFields(remito, updated, ["vendedorId", "subtotal", "descuentoPorcentaje", "total", "montoPagado", "pagoEstado", "metodoPago"]),
+        deudaCliente: debtDelta !== 0 ? { antes: previousDebt, despues: nextDebt, diferencia: debtDelta } : undefined,
+        productosEditados: input.items ? true : undefined
+      }
+    }, tx);
+    return updated;
   });
   res.json(updated);
 });
@@ -276,6 +300,15 @@ remittancesRouter.post("/:id/cancelar", requireRoles(Rol.ADMINISTRADOR, Rol.EMPL
         motivo: "Cancelación de remito"
       });
     }
+    await audit({
+      usuarioId: req.user!.id,
+      modulo: "Ventas",
+      accion: "CANCELAR",
+      entidad: "Boleta",
+      entidadId: remito.id,
+      descripcion: `Canceló boleta #${remito.numero}`,
+      cambios: { estado: { antes: remito.estado, despues: updated.estado }, deudaRestada: pendingDebt }
+    }, tx);
   });
   res.status(204).send();
 });
@@ -308,6 +341,15 @@ remittancesRouter.delete("/:id", requireRoles(Rol.ADMINISTRADOR), async (req, re
     }
     await tx.remitoItem.deleteMany({ where: { remitoId: remito.id } });
     await tx.remito.delete({ where: { id: remito.id } });
+    await audit({
+      usuarioId: req.user!.id,
+      modulo: "Ventas",
+      accion: "ELIMINAR",
+      entidad: "Boleta",
+      entidadId: remito.id,
+      descripcion: `Eliminó definitivamente boleta #${remito.numero}`,
+      cambios: { antes: remito }
+    }, tx);
   });
 
   res.status(204).send();

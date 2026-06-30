@@ -6,6 +6,7 @@ import { compraSchema } from "../lib/schemas.js";
 import { pageArgs } from "../lib/validation.js";
 import { requireAuth, requireRoles } from "../middleware/auth.js";
 import { adjustProductStock, ensureActiveProducts } from "../lib/stock.js";
+import { audit } from "../lib/audit.js";
 
 export const purchasesRouter = Router();
 purchasesRouter.use(requireAuth);
@@ -86,6 +87,15 @@ purchasesRouter.post("/", requireRoles(Rol.ADMINISTRADOR, Rol.EMPLEADO), async (
         await tx.producto.update({ where: { id: item.productoId }, data: { costo: item.costoUnitario } });
       }
     }
+    await audit({
+      usuarioId: req.user!.id,
+      modulo: "Compras",
+      accion: "CREAR",
+      entidad: "Compra",
+      entidadId: created.id,
+      descripcion: `Cargó compra de ${created.proveedorNombre} por $${Number(created.total).toFixed(2)}`,
+      cambios: { despues: created }
+    }, tx);
     return created;
   });
 
@@ -111,6 +121,15 @@ purchasesRouter.post("/:id/anular", requireRoles(Rol.ADMINISTRADOR), async (req,
         motivo: "Anulación de compra"
       });
     }
+    await audit({
+      usuarioId: req.user!.id,
+      modulo: "Compras",
+      accion: "ANULAR",
+      entidad: "Compra",
+      entidadId: compra.id,
+      descripcion: `Anuló compra de ${compra.proveedorNombre} por $${Number(compra.total).toFixed(2)}`,
+      cambios: { estado: { antes: compra.estado, despues: updated.estado }, items: updated.items.length }
+    }, tx);
   });
 
   res.status(204).send();

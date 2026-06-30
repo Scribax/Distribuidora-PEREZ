@@ -5,6 +5,7 @@ import { fail } from "../lib/errors.js";
 import { gastoSchema } from "../lib/schemas.js";
 import { pageArgs } from "../lib/validation.js";
 import { requireAuth, requireRoles } from "../middleware/auth.js";
+import { audit, diffFields } from "../lib/audit.js";
 
 export const expensesRouter = Router();
 expensesRouter.use(requireAuth, requireRoles(Rol.ADMINISTRADOR, Rol.EMPLEADO));
@@ -36,17 +37,45 @@ expensesRouter.post("/", async (req, res) => {
   const input = gastoSchema.parse(req.body);
   if (Number(input.monto) <= 0) fail(422, "MONTO_INVALIDO", "El monto del gasto debe ser mayor a cero");
   const gasto = await prisma.gasto.create({ data: { ...input, usuarioId: req.user!.id } });
+  await audit({
+    usuarioId: req.user!.id,
+    modulo: "Gastos",
+    accion: "CREAR",
+    entidad: "Gasto",
+    entidadId: gasto.id,
+    descripcion: `Registró gasto: ${gasto.descripcion}`,
+    cambios: { despues: gasto }
+  });
   res.status(201).json(gasto);
 });
 
 expensesRouter.patch("/:id", async (req, res) => {
   const input = gastoSchema.partial().parse(req.body);
   if (input.monto !== undefined && Number(input.monto) <= 0) fail(422, "MONTO_INVALIDO", "El monto del gasto debe ser mayor a cero");
+  const before = await prisma.gasto.findUnique({ where: { id: String(req.params.id) } });
   const gasto = await prisma.gasto.update({ where: { id: String(req.params.id) }, data: input });
+  await audit({
+    usuarioId: req.user!.id,
+    modulo: "Gastos",
+    accion: "EDITAR",
+    entidad: "Gasto",
+    entidadId: gasto.id,
+    descripcion: `Editó gasto: ${gasto.descripcion}`,
+    cambios: diffFields(before, gasto, ["fecha", "categoria", "descripcion", "monto", "metodoPago", "comprobante", "observaciones"])
+  });
   res.json(gasto);
 });
 
 expensesRouter.delete("/:id", requireRoles(Rol.ADMINISTRADOR), async (req, res) => {
-  await prisma.gasto.delete({ where: { id: String(req.params.id) } });
+  const gasto = await prisma.gasto.delete({ where: { id: String(req.params.id) } });
+  await audit({
+    usuarioId: req.user!.id,
+    modulo: "Gastos",
+    accion: "ELIMINAR",
+    entidad: "Gasto",
+    entidadId: gasto.id,
+    descripcion: `Eliminó gasto: ${gasto.descripcion}`,
+    cambios: { antes: gasto }
+  });
   res.status(204).send();
 });

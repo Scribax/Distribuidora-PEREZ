@@ -6,6 +6,7 @@ import { hashPassword } from "../lib/auth.js";
 import { userCreateSchema, userUpdateSchema } from "../lib/schemas.js";
 import { pageArgs } from "../lib/validation.js";
 import { requireAuth, requireRoles } from "../middleware/auth.js";
+import { audit, diffFields } from "../lib/audit.js";
 
 export const usersRouter = Router();
 usersRouter.use(requireAuth, requireRoles(Rol.ADMINISTRADOR));
@@ -27,6 +28,15 @@ usersRouter.post("/", async (req, res) => {
       data: { ...userInput, passwordHash: await hashPassword(password) },
       select: { id: true, nombre: true, email: true, rol: true, activo: true }
     });
+    await audit({
+      usuarioId: req.user!.id,
+      modulo: "Usuarios",
+      accion: "CREAR",
+      entidad: "Usuario",
+      entidadId: user.id,
+      descripcion: `Creó el usuario ${user.nombre}`,
+      cambios: { despues: user }
+    });
     res.status(201).json(user);
   } catch {
     fail(422, "EMAIL_DUPLICADO", "El email ya está registrado");
@@ -36,6 +46,7 @@ usersRouter.post("/", async (req, res) => {
 usersRouter.patch("/:id", async (req, res) => {
   const id = String(req.params.id);
   const input = userUpdateSchema.parse(req.body);
+  const before = await prisma.user.findUnique({ where: { id }, select: { id: true, nombre: true, email: true, rol: true, activo: true } });
   if (input.activo === false) {
     const user = await prisma.user.findUnique({ where: { id } });
     if (user?.rol === Rol.ADMINISTRADOR) {
@@ -50,5 +61,16 @@ usersRouter.patch("/:id", async (req, res) => {
     select: { id: true, nombre: true, email: true, rol: true, activo: true }
   });
   if (input.activo === false) await prisma.refreshToken.updateMany({ where: { userId: id }, data: { revoked: true } });
+  const cambios = diffFields(before, user, ["nombre", "email", "rol", "activo"]) ?? {};
+  if (input.password) cambios.password = { antes: "Sin mostrar", despues: "Actualizada" };
+  await audit({
+    usuarioId: req.user!.id,
+    modulo: "Usuarios",
+    accion: "EDITAR",
+    entidad: "Usuario",
+    entidadId: user.id,
+    descripcion: `Editó el usuario ${user.nombre}`,
+    cambios
+  });
   res.json(user);
 });

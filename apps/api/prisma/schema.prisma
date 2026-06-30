@@ -76,6 +76,7 @@ model User {
   remitos       Remito[]
   movimientos   MovimientoStock[]
   gastos        Gasto[]
+  auditoria     AuditLog[]
   createdAt     DateTime          @default(now()) @map("created_at")
   updatedAt     DateTime          @updatedAt @map("updated_at")
 
@@ -298,4 +299,24 @@ model Gasto {
   @@index([fecha])
   @@index([categoria])
   @@map("gastos")
+}
+
+model AuditLog {
+  id          String   @id @default(uuid()) @db.Uuid
+  usuarioId   String   @map("usuario_id") @db.Uuid
+  modulo      String   @db.VarChar(60)
+  accion      String   @db.VarChar(60)
+  entidad     String   @db.VarChar(80)
+  entidadId   String?  @map("entidad_id") @db.Uuid
+  descripcion String   @db.VarChar(300)
+  cambios     Json?
+  usuario     User     @relation(fields: [usuarioId], references: [id])
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([usuarioId])
+  @@index([modulo])
+  @@index([accion])
+  @@index([entidad])
+  @@index([createdAt])
+  @@map("audit_logs")
 }
