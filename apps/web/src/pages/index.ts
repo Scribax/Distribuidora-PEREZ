@@ -1,0 +1,11 @@
+export { DashboardView } from "./DashboardView";
+export { ProductsView } from "./ProductsView";
+export { ClientsView } from "./ClientsView";
+export { PurchasesView } from "./PurchasesView";
+export { RemittancesView } from "./RemittancesView";
+export { StockView } from "./StockView";
+export { ExpensesView } from "./ExpensesView";
+export { BalanceView } from "./BalanceView";
+export { ReportsView } from "./ReportsView";
+export { CommercialsView } from "./CommercialsView";
+export { UsersView } from "./UsersView";
