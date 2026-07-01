@@ -13,7 +13,7 @@ export function ExpensesView({ api, isAdmin }: { api: ReturnType<typeof useApi>;
   const [total, setTotal] = useState(0);
   const [filters, setFilters] = useState({ q: "", categoria: "", fechaDesde: "", fechaHasta: "" });
   const [error, setError] = useState("");
-  const load = (next = filters) => api(`/gastos?${qs({ ...next, pageSize: 100 })}`).then((data) => { setRows(data.items); setTotal(data.montoTotal ?? 0); });
+  const load = (next = filters) => api(`/gastos?${qs({ ...next, pageSize: 100 })}`).then((data) => { setRows(data.items); setTotal(data.montoTotal ?? 0); }).catch((err) => setError(err?.message ?? "No se pudieron cargar los gastos"));
   useEffect(() => { load(); }, []);
   async function create(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -30,8 +30,13 @@ export function ExpensesView({ api, isAdmin }: { api: ReturnType<typeof useApi>;
   }
   async function remove(row: any) {
     if (!confirmAction(`¿Eliminar el gasto "${row.descripcion}"?`)) return;
-    await api(`/gastos/${row.id}`, { method: "DELETE" });
-    await load();
+    setError("");
+    try {
+      await api(`/gastos/${row.id}`, { method: "DELETE" });
+      await load();
+    } catch (err: any) {
+      setError(err.message ?? "No se pudo eliminar el gasto");
+    }
   }
   return <div className="expenses-page">
     <section className="panel wide">

@@ -47,12 +47,14 @@ usersRouter.patch("/:id", async (req, res) => {
   const id = String(req.params.id);
   const input = userUpdateSchema.parse(req.body);
   const before = await prisma.user.findUnique({ where: { id }, select: { id: true, nombre: true, email: true, rol: true, activo: true } });
-  if (input.activo === false) {
-    const user = await prisma.user.findUnique({ where: { id } });
-    if (user?.rol === Rol.ADMINISTRADOR) {
-      const admins = await prisma.user.count({ where: { rol: Rol.ADMINISTRADOR, activo: true, NOT: { id } } });
-      if (admins === 0) fail(422, "ULTIMO_ADMIN", "No se puede desactivar al último administrador activo");
-    }
+  if (!before) fail(404, "USUARIO_NO_ENCONTRADO", "Usuario no encontrado");
+  // Protección del último administrador: se dispara tanto al desactivarlo como al
+  // quitarle el rol de ADMINISTRADOR. En ambos casos el sistema quedaría sin admins.
+  const desactivando = input.activo === false;
+  const degradando = input.rol !== undefined && input.rol !== Rol.ADMINISTRADOR;
+  if ((desactivando || degradando) && before.rol === Rol.ADMINISTRADOR) {
+    const admins = await prisma.user.count({ where: { rol: Rol.ADMINISTRADOR, activo: true, NOT: { id } } });
+    if (admins === 0) fail(422, "ULTIMO_ADMIN", "No se puede dejar al sistema sin un administrador activo");
   }
   const passwordHash = input.password ? await hashPassword(input.password) : undefined;
   const user = await prisma.user.update({

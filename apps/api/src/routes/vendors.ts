@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { Rol } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
+import { fail } from "../lib/errors.js";
 import { vendedorSchema } from "../lib/schemas.js";
 import { pageArgs } from "../lib/validation.js";
 import { requireAuth, requireRoles } from "../middleware/auth.js";
@@ -81,6 +82,7 @@ vendorsRouter.post("/", requireRoles(Rol.ADMINISTRADOR), async (req, res) => {
 vendorsRouter.patch("/:id", requireRoles(Rol.ADMINISTRADOR), async (req, res) => {
   const input = vendedorSchema.partial().parse(req.body);
   const before = await prisma.vendedor.findUnique({ where: { id: String(req.params.id) } });
+  if (!before) fail(404, "VENDEDOR_NO_ENCONTRADO", "Vendedor no encontrado");
   const vendedor = await prisma.vendedor.update({ where: { id: String(req.params.id) }, data: input });
   await audit({
     usuarioId: req.user!.id,

@@ -1,7 +1,8 @@
 import type { Product } from "./types";
 
 export function money(value: number | string) {
-  return new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS" }).format(Number(value));
+  const n = Number(value);
+  return new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS" }).format(Number.isFinite(n) ? n : 0);
 }
 
 export function dateInput(value?: string) {

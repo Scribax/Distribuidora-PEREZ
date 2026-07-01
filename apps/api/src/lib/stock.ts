@@ -18,8 +18,19 @@ export async function adjustProductStock(
   const producto = await tx.producto.findUnique({ where: { id: args.productoId } });
   if (!producto) fail(404, "PRODUCTO_NO_ENCONTRADO", "Producto no encontrado");
 
-  const stockResultante = producto.stockActual + args.delta;
-  if (stockResultante < 0) {
+  // Actualización atómica: solo aplica el delta si el stock resultante no queda negativo.
+  // El guard va dentro del WHERE para evitar condiciones de carrera (lost updates) entre
+  // operaciones concurrentes que leen-modifican-escriben el mismo producto.
+  const guard =
+    args.delta < 0
+      ? { stockActual: { gte: -args.delta } }
+      : {};
+  const updated = await tx.producto.updateMany({
+    where: { id: args.productoId, ...guard },
+    data: { stockActual: { increment: args.delta } }
+  });
+
+  if (updated.count === 0) {
     fail(422, "STOCK_NEGATIVO", "La operación resultaría en stock negativo", {
       producto: producto.nombre,
       stock_disponible: producto.stockActual,
@@ -27,10 +38,13 @@ export async function adjustProductStock(
     });
   }
 
-  await tx.producto.update({
+  // Leemos el valor real tras el incremento atómico para registrar el movimiento
+  // con el stock resultante correcto incluso bajo operaciones concurrentes.
+  const after = await tx.producto.findUnique({
     where: { id: args.productoId },
-    data: { stockActual: stockResultante }
+    select: { stockActual: true }
   });
+  const stockResultante = after?.stockActual ?? producto.stockActual + args.delta;
 
   await tx.movimientoStock.create({
     data: {

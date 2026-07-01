@@ -27,7 +27,7 @@ async function metricsFor(start: Date, end: Date) {
   };
 }
 
-dashboardRouter.get("/", async (_req, res) => {
+dashboardRouter.get("/", async (req, res) => {
   const now = new Date();
   const start = startOfMonth(now);
   const end = endOfMonth(now);
@@ -43,6 +43,19 @@ dashboardRouter.get("/", async (_req, res) => {
     return { mes: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`, ...m };
   }));
   const valorStock = stockValueRows.reduce((sum, p) => sum + Number(p.costo) * p.stockActual, 0);
+
+  // El rol CONSULTA no accede a datos de rentabilidad (costos, ganancias, gastos, valor de stock).
+  const verFinanzas = req.user!.rol !== Rol.CONSULTA;
+  if (!verFinanzas) {
+    return res.json({
+      ventasMes: month.ventas,
+      comprasMes: month.compras,
+      stockBajo,
+      ultimosRemitos,
+      chart: chart.map((c) => ({ mes: c.mes, ventas: c.ventas }))
+    });
+  }
+
   res.json({
     ventasMes: month.ventas,
     comprasMes: month.compras,

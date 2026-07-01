@@ -8,7 +8,13 @@ import { BalanceView, ClientsView, CommercialsView, DashboardView, ExpensesView,
 export default function App() {
   const [session, setSession] = useState<Session | null>(() => {
     const raw = localStorage.getItem("perez_session");
-    return raw ? JSON.parse(raw) : null;
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw);
+    } catch {
+      localStorage.removeItem("perez_session");
+      return null;
+    }
   });
   const [theme, setTheme] = useState<"light" | "dark">(() => {
     const saved = localStorage.getItem("perez_theme");

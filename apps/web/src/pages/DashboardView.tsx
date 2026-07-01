@@ -8,7 +8,9 @@ import { EntityPicker, ItemList, ProductPicker } from "../components/pickers";
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 export function DashboardView({ api }: { api: ReturnType<typeof useApi> }) {
   const [data, setData] = useState<Dashboard | null>(null);
-  useEffect(() => { api("/dashboard").then(setData); }, [api]);
+  const [error, setError] = useState("");
+  useEffect(() => { api("/dashboard").then(setData).catch((err) => setError(err?.message ?? "No se pudo cargar el panel")); }, [api]);
+  if (error) return <p className="error">{error}</p>;
   if (!data) return <p>Cargando...</p>;
   return <>
     <div className="metrics">

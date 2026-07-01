@@ -14,7 +14,12 @@ export function Login({ onLogin, theme, onToggleTheme }: { onLogin: (session: Se
     setLoading(true);
     try {
       const res = await fetch(`${API}/auth/login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, password }) });
-      if (!res.ok) throw await res.json();
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        let parsed: any = { message: `Error ${res.status}` };
+        if (text) { try { parsed = JSON.parse(text); } catch { parsed = { message: text.slice(0, 300) }; } }
+        throw parsed;
+      }
       const session = await res.json();
       localStorage.setItem("perez_session", JSON.stringify(session));
       onLogin(session);

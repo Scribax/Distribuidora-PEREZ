@@ -53,6 +53,7 @@ expensesRouter.patch("/:id", async (req, res) => {
   const input = gastoSchema.partial().parse(req.body);
   if (input.monto !== undefined && Number(input.monto) <= 0) fail(422, "MONTO_INVALIDO", "El monto del gasto debe ser mayor a cero");
   const before = await prisma.gasto.findUnique({ where: { id: String(req.params.id) } });
+  if (!before) fail(404, "GASTO_NO_ENCONTRADO", "Gasto no encontrado");
   const gasto = await prisma.gasto.update({ where: { id: String(req.params.id) }, data: input });
   await audit({
     usuarioId: req.user!.id,

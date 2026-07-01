@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { Prisma, Rol } from "@prisma/client";
+import { endOfDay } from "date-fns";
 import { prisma } from "../lib/prisma.js";
 import { fail } from "../lib/errors.js";
 import { aumentoPreciosSchema, categoriaSchema, productoSchema, productoUpdateSchema } from "../lib/schemas.js";
@@ -139,8 +140,8 @@ catalogRouter.post("/productos/aumentar-precios", requireRoles(Rol.ADMINISTRADOR
   await prisma.$transaction(productos.map((producto) => prisma.producto.update({
     where: { id: producto.id },
     data: {
-      precioMayorista: input.aplicarMayorista ? Number(producto.precioMayorista) * factor : undefined,
-      precioMinorista: input.aplicarMinorista ? Number(producto.precioMinorista) * factor : undefined
+      precioMayorista: input.aplicarMayorista ? Math.round(Number(producto.precioMayorista) * factor * 100) / 100 : undefined,
+      precioMinorista: input.aplicarMinorista ? Math.round(Number(producto.precioMinorista) * factor * 100) / 100 : undefined
     }
   })));
   await audit({
@@ -246,7 +247,7 @@ catalogRouter.get("/stock/movimientos", async (req, res) => {
   const productoId = String(req.query.productoId ?? "");
   const tipo = String(req.query.tipo ?? "");
   const fechaDesde = req.query.fechaDesde ? new Date(String(req.query.fechaDesde)) : undefined;
-  const fechaHasta = req.query.fechaHasta ? new Date(String(req.query.fechaHasta)) : undefined;
+  const fechaHasta = req.query.fechaHasta ? endOfDay(new Date(String(req.query.fechaHasta))) : undefined;
   const where: Prisma.MovimientoStockWhereInput = {
     productoId: productoId || undefined,
     tipo: tipo ? (tipo as any) : undefined,

@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { Prisma, Rol } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
+import { fail } from "../lib/errors.js";
 import { proveedorSchema } from "../lib/schemas.js";
 import { pageArgs } from "../lib/validation.js";
 import { requireAuth, requireRoles } from "../middleware/auth.js";
@@ -47,6 +48,7 @@ suppliersRouter.post("/", requireRoles(Rol.ADMINISTRADOR, Rol.EMPLEADO), async (
 suppliersRouter.patch("/:id", requireRoles(Rol.ADMINISTRADOR), async (req, res) => {
   const input = proveedorSchema.partial().parse(req.body);
   const before = await prisma.proveedor.findUnique({ where: { id: String(req.params.id) } });
+  if (!before) fail(404, "PROVEEDOR_NO_ENCONTRADO", "Proveedor no encontrado");
   const proveedor = await prisma.proveedor.update({ where: { id: String(req.params.id) }, data: input });
   await audit({
     usuarioId: req.user!.id,

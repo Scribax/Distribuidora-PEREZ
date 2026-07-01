@@ -1,7 +1,7 @@
 import ExcelJS from "exceljs";
 import PDFDocument from "pdfkit";
 import { Router } from "express";
-import { endOfMonth, startOfMonth } from "date-fns";
+import { endOfMonth, endOfDay, startOfMonth } from "date-fns";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth, requireRoles } from "../middleware/auth.js";
 import { Rol } from "@prisma/client";
@@ -92,9 +92,12 @@ reportsRouter.get("/ventas", async (req, res) => {
     orderBy: { fecha: "desc" }
   });
   const rows = sales.map((sale) => {
-    const comision = sale.vendedor ? money(sale.total) * Number(sale.vendedor.porcentajeComision) / 100 : 0;
+    // Los remitos cancelados se muestran (con su estado) pero no aportan a las
+    // métricas de rentabilidad: ganancia y comisión van en cero para no inflar totales.
+    const anulado = sale.estado !== "ACTIVO";
+    const comision = !anulado && sale.vendedor ? money(sale.total) * Number(sale.vendedor.porcentajeComision) / 100 : 0;
     const costoVendido = sale.items.reduce((sum, item) => sum + money(item.costoTotal), 0);
-    const ganancia = money(sale.total) - costoVendido;
+    const ganancia = anulado ? 0 : money(sale.total) - costoVendido;
     return {
       numero: sale.numero,
       fecha: sale.fecha.toISOString().slice(0, 10),
@@ -104,7 +107,7 @@ reportsRouter.get("/ventas", async (req, res) => {
       pagado: money(sale.montoPagado),
       pago: sale.pagoEstado,
       metodo: sale.metodoPago ?? "",
-      costoVendido: Number(costoVendido.toFixed(2)),
+      costoVendido: Number((anulado ? 0 : costoVendido).toFixed(2)),
       ganancia: Number(ganancia.toFixed(2)),
       comision: Number(comision.toFixed(2)),
       estado: sale.estado
@@ -204,7 +207,7 @@ reportsRouter.get("/auditoria", async (req, res) => {
   const usuarioId = String(req.query.usuarioId ?? "");
   const entidad = String(req.query.entidad ?? "");
   const fechaDesde = req.query.fechaDesde ? new Date(String(req.query.fechaDesde)) : undefined;
-  const fechaHasta = req.query.fechaHasta ? new Date(String(req.query.fechaHasta)) : undefined;
+  const fechaHasta = req.query.fechaHasta ? endOfDay(new Date(String(req.query.fechaHasta))) : undefined;
   const where = {
     modulo: modulo || undefined,
     accion: accion || undefined,
