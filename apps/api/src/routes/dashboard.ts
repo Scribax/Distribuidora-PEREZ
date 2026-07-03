@@ -79,3 +79,41 @@ dashboardRouter.get("/balance", requireRoles(Rol.ADMINISTRADOR, Rol.EMPLEADO), a
   const valorStock = stock.reduce((sum, p) => sum + Number(p.costo) * p.stockActual, 0);
   res.json({ year, month, ventas: m.ventas, compras: m.compras, costoVendido: m.costoVendido, gananciaBruta: m.gananciaBruta, gastos: m.gastos, resultado: m.gananciaNeta, valorStock });
 });
+
+dashboardRouter.get("/caja", requireRoles(Rol.ADMINISTRADOR, Rol.EMPLEADO), async (req, res) => {
+  const year = Number(req.query.year ?? new Date().getFullYear());
+  const month = Number(req.query.month ?? new Date().getMonth() + 1);
+  const date = new Date(year, month - 1, 1);
+  const start = startOfMonth(date);
+  const end = endOfMonth(date);
+  const [cobros, gastos] = await Promise.all([
+    prisma.remito.groupBy({
+      by: ["metodoPago"],
+      where: { estado: "ACTIVO", fecha: { gte: start, lte: end }, metodoPago: { not: null }, montoPagado: { gt: 0 } },
+      _sum: { montoPagado: true },
+      _count: { _all: true }
+    }),
+    prisma.gasto.groupBy({
+      by: ["metodoPago"],
+      where: { fecha: { gte: start, lte: end }, metodoPago: { not: null } },
+      _sum: { monto: true },
+      _count: { _all: true }
+    })
+  ]);
+  const methods = ["EFECTIVO", "TRANSFERENCIA", "TARJETA", "CHEQUE", "OTRO"];
+  const items = methods.map((metodo) => {
+    const income = cobros.find((row) => row.metodoPago === metodo);
+    const outcome = gastos.find((row) => row.metodoPago === metodo);
+    const ingresos = Number(income?._sum.montoPagado ?? 0);
+    const egresos = Number(outcome?._sum.monto ?? 0);
+    return {
+      metodoPago: metodo,
+      ingresos,
+      egresos,
+      saldo: ingresos - egresos,
+      cobros: income?._count._all ?? 0,
+      gastos: outcome?._count._all ?? 0
+    };
+  });
+  res.json({ year, month, items, totalIngresos: items.reduce((sum, item) => sum + item.ingresos, 0), totalEgresos: items.reduce((sum, item) => sum + item.egresos, 0), saldo: items.reduce((sum, item) => sum + item.saldo, 0) });
+});

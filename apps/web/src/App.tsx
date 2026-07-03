@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { BarChart3, Boxes, Calculator, LogOut, Menu, Moon, PackagePlus, ReceiptText, ShoppingCart, Sun, UserCog, Users, X } from "lucide-react";
 import { useApi } from "./api";
 import { Login } from "./Login";
+import { InstallButton } from "./components/InstallButton";
 import type { Session } from "./types";
 import { BalanceView, ClientsView, CommercialsView, DashboardView, ExpensesView, ProductsView, PurchasesView, RemittancesView, ReportsView, StockView, UsersView } from "./pages/index";
 
@@ -49,6 +50,7 @@ export default function App() {
       <div className="brand"><img src="/brand-logo.png" alt="Perez Martin Distribuidora" /><button type="button" className="nav-close" onClick={() => setNavOpen(false)} title="Cerrar menú"><X size={18} /></button></div>
       {nav.map(([id, Icon, label]) => <button key={id} className={view === id ? "active" : ""} onClick={() => { setView(id); setNavOpen(false); }} title={label}><Icon size={18} />{label}</button>)}
       <button className="theme-toggle" onClick={() => setTheme((current) => current === "dark" ? "light" : "dark")} title={theme === "dark" ? "Modo claro" : "Modo oscuro"}>{theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}{theme === "dark" ? "Claro" : "Oscuro"}</button>
+      <InstallButton />
       <button className="logout" onClick={() => { localStorage.removeItem("perez_session"); setSession(null); }}><LogOut size={18} />Salir</button>
     </aside>
     <section className="workspace">

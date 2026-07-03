@@ -97,10 +97,12 @@ input, select {
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 10px 12px;
+  font-size: 16px; /* evita el auto-zoom en iOS al enfocar */
   background: var(--input-bg);
   color: var(--text);
 }
 textarea {
+  font-size: 16px; /* evita el auto-zoom en iOS al enfocar */
   background: var(--input-bg);
   color: var(--text);
   border-color: var(--line);
@@ -193,7 +195,7 @@ label.check input {
   padding: 12px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  font-size: 14px;
+  font-size: 16px; /* evita el auto-zoom en iOS al enfocar */
   transition: border-color 0.2s, box-shadow 0.2s;
 }
 .login-field input:focus {
@@ -279,6 +281,14 @@ aside button {
 aside button.active, aside button:hover { background: var(--sidebar-active); }
 .theme-toggle {
   border: 1px solid #ffffff1f;
+}
+.install-button {
+  border: 1px solid #ffffff33;
+  background: var(--sidebar-active);
+  font-weight: 700;
+}
+.install-button:hover {
+  filter: brightness(1.08);
 }
 .logout { margin-top: auto; }
 .mobile-menu-button,
@@ -454,6 +464,33 @@ header span { color: var(--muted); }
 .balance-chart {
   min-width: 0;
   overflow: hidden;
+}
+.cashbox-panel {
+  display: grid;
+  gap: 10px;
+}
+.cashbox-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(190px, 100%), 1fr));
+  gap: 8px;
+}
+.cashbox-card {
+  display: grid;
+  gap: 5px;
+  padding: 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.cashbox-card span,
+.cashbox-card small {
+  color: var(--muted);
+  font-size: 13px;
+}
+.cashbox-card strong {
+  font-size: 18px;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
 }
 .reports-page {
   display: grid;
@@ -1534,6 +1571,110 @@ header span { color: var(--muted); }
   display: grid;
   gap: 8px;
 }
+.commission-sync {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(180px, 0.5fr) minmax(190px, 0.6fr);
+  gap: 10px;
+  align-items: end;
+  padding: 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: var(--surface-soft);
+}
+.commission-sync-form {
+  display: grid;
+  grid-template-columns: minmax(130px, 1fr) minmax(100px, 0.7fr) auto;
+  gap: 8px;
+  align-items: end;
+}
+.commission-sync-actions {
+  display: grid;
+  gap: 6px;
+  align-content: end;
+}
+.commission-sync-actions span,
+.success-text {
+  color: var(--ok);
+  font-size: 13px;
+  font-weight: 800;
+}
+.commercial-account {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.account-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(260px, 100%), 1fr));
+  gap: 8px;
+}
+.account-card {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: var(--surface-elevated);
+}
+.account-card div,
+.account-metrics {
+  display: grid;
+  gap: 4px;
+}
+.account-card span,
+.account-card small {
+  color: var(--muted);
+  font-size: 13px;
+}
+.account-metrics strong {
+  display: block;
+  color: var(--text);
+}
+.positive-money {
+  color: var(--ok) !important;
+}
+.negative-money {
+  color: var(--danger) !important;
+}
+.account-form {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(120px, 1fr));
+  gap: 8px;
+  align-items: end;
+}
+.account-description,
+.account-notes {
+  grid-column: span 2;
+}
+.account-form button {
+  min-height: 42px;
+}
+.account-movement-list {
+  display: grid;
+  gap: 8px;
+}
+.account-movement-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 10px;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+}
+.account-movement-row div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.account-movement-row span,
+.account-movement-row small {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
 .vendor-list-grid {
   grid-template-columns: repeat(auto-fill, minmax(min(340px, 100%), 1fr));
 }
@@ -2295,6 +2436,16 @@ button:disabled {
   .filters, .filters-wide { grid-template-columns: 1fr; }
   .line-item { grid-template-columns: minmax(0, 1fr) 36px; }
   .line-item > strong { grid-column: 1 / -1; }
+  .commission-sync,
+  .commission-sync-form,
+  .account-form,
+  .account-movement-row {
+    grid-template-columns: 1fr;
+  }
+  .account-description,
+  .account-notes {
+    grid-column: auto;
+  }
   .vendor-stats-card {
     grid-template-columns: 1fr;
   }

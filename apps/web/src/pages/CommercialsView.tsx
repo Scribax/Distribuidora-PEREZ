@@ -16,9 +16,17 @@ export function CommercialsView({ api, isAdmin, canWrite }: { api: ReturnType<ty
   const [vendorModal, setVendorModal] = useState<"create" | "edit" | null>(null);
   const [supplierModal, setSupplierModal] = useState<"create" | "edit" | null>(null);
   const [error, setError] = useState("");
+  const now = new Date();
+  const [commissionPeriod, setCommissionPeriod] = useState({ year: now.getFullYear(), month: now.getMonth() + 1 });
+  const [commissionRows, setCommissionRows] = useState<any[]>([]);
+  const [commissionMessage, setCommissionMessage] = useState("");
+  const [accountRows, setAccountRows] = useState<any[]>([]);
+  const [accountMovements, setAccountMovements] = useState<any[]>([]);
   const loadVendors = () => api("/vendedores?pageSize=100").then((d) => setVendors(d.items));
   const loadSuppliers = () => api("/proveedores?pageSize=100").then((d) => setSuppliers(d.items));
-  useEffect(() => { loadVendors(); loadSuppliers(); }, []);
+  const loadCommissionRows = (period = commissionPeriod) => api(`/vendedores/comisiones/gastos?${qs(period)}`).then((data) => setCommissionRows(data.items ?? [])).catch(() => setCommissionRows([]));
+  const loadAccountRows = (period = commissionPeriod) => api(`/vendedores/cuenta/resumen?${qs(period)}`).then((data) => { setAccountRows(data.items ?? []); setAccountMovements(data.movimientos ?? []); }).catch(() => { setAccountRows([]); setAccountMovements([]); });
+  useEffect(() => { loadVendors(); loadSuppliers(); loadCommissionRows(); loadAccountRows(); }, []);
   async function openVendor(vendor: Vendor) {
     setError("");
     setVendorDetail(await api(`/vendedores/${vendor.id}`));
@@ -60,6 +68,63 @@ export function CommercialsView({ api, isAdmin, canWrite }: { api: ReturnType<ty
       setError(err.message ?? "No se pudo actualizar el vendedor");
     }
   }
+  async function previewCommissions(event?: React.FormEvent<HTMLFormElement>) {
+    event?.preventDefault();
+    setError("");
+    setCommissionMessage("");
+    try {
+      await loadCommissionRows(commissionPeriod);
+      await loadAccountRows(commissionPeriod);
+    } catch (err: any) {
+      setError(err.message ?? "No se pudieron calcular las comisiones");
+    }
+  }
+  async function syncCommissions() {
+    const total = commissionRows.reduce((sum, row) => sum + Number(row.comisionTotal ?? 0), 0);
+    if (total <= 0) {
+      setCommissionMessage("No hay comisiones para registrar en este periodo.");
+      return;
+    }
+    const label = `${String(commissionPeriod.month).padStart(2, "0")}/${commissionPeriod.year}`;
+    if (!confirmAction(`¿Registrar ${money(total)} de comisiones de ${label} como gastos de sueldos? Si ya existen, se actualizan.`)) return;
+    setError("");
+    setCommissionMessage("");
+    try {
+      const result = await api("/vendedores/comisiones/gastos", { method: "POST", body: JSON.stringify(commissionPeriod) });
+      setCommissionMessage(`Comisiones registradas en gastos: ${money(result.total ?? 0)} (${result.created ?? 0} nuevas, ${result.updated ?? 0} actualizadas).`);
+      await loadCommissionRows(commissionPeriod);
+      await loadVendors();
+      await loadAccountRows(commissionPeriod);
+    } catch (err: any) {
+      setError(err.message ?? "No se pudieron registrar las comisiones como gastos");
+    }
+  }
+  async function createAccountMovement(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formEl = event.currentTarget;
+    const form = payload(formEl);
+    setError("");
+    setCommissionMessage("");
+    try {
+      await api("/vendedores/cuenta/movimientos", { method: "POST", body: JSON.stringify({ vendedorId: form.vendedorId, tipo: form.tipo, fecha: form.fecha, monto: Number(form.monto), metodoPago: form.metodoPago || null, descripcion: form.descripcion, comprobante: form.comprobante || null, observaciones: form.observaciones || null }) });
+      formEl.reset();
+      await loadAccountRows(commissionPeriod);
+      await loadCommissionRows(commissionPeriod);
+    } catch (err: any) {
+      setError(err.message ?? "No se pudo registrar el movimiento");
+    }
+  }
+  async function removeAccountMovement(row: any) {
+    if (!confirmAction(`¿Eliminar este movimiento de ${row.vendedor?.nombre ?? "cuenta"}?`)) return;
+    setError("");
+    try {
+      await api(`/vendedores/cuenta/movimientos/${row.id}`, { method: "DELETE" });
+      await loadAccountRows(commissionPeriod);
+      await loadCommissionRows(commissionPeriod);
+    } catch (err: any) {
+      setError(err.message ?? "No se pudo eliminar el movimiento");
+    }
+  }
   async function createSupplier(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const formEl = event.currentTarget;
@@ -90,12 +155,55 @@ export function CommercialsView({ api, isAdmin, canWrite }: { api: ReturnType<ty
   }
   const activeCount = vendors.filter((vendor) => vendor.activo).length;
   const activeSuppliers = suppliers.filter((supplier) => supplier.activo).length;
+  const commissionTotal = commissionRows.reduce((sum, row) => sum + Number(row.comisionTotal ?? 0), 0);
+  const commissionRegistered = commissionRows.filter((row) => row.gastoId).length;
   return <div className="client-page">
     <section className="panel vendor-panel wide">
       <div className="detail-head"><div><h2>Comerciales</h2><span>Vendedores para comisiones y proveedores para compras.</span></div>{tab === "vendors" ? <button type="button" onClick={() => { setError(""); setSelectedVendor(null); setVendorModal("create"); }}>Nuevo vendedor</button> : canWrite && <button type="button" onClick={() => { setError(""); setSelectedSupplier(null); setSupplierModal("create"); }}>Nuevo proveedor</button>}</div>
       <div className="tabs compact-tabs"><button type="button" className={tab === "vendors" ? "active" : ""} onClick={() => { setVendorDetail(null); setTab("vendors"); }}>Vendedores</button><button type="button" className={tab === "suppliers" ? "active" : ""} onClick={() => { setVendorDetail(null); setTab("suppliers"); }}>Proveedores</button></div>
       {tab === "vendors" && <>
         <div className="section-title"><h3>Vendedores</h3><span>{activeCount} activos · comisiones aplicadas en ventas.</span></div>
+        <div className="commission-sync">
+          <form className="commission-sync-form" onSubmit={previewCommissions}>
+            <label className="field-label"><span>Mes</span><select value={commissionPeriod.month} onChange={(event) => setCommissionPeriod({ ...commissionPeriod, month: Number(event.target.value) })}>{Array.from({ length: 12 }, (_, index) => <option key={index + 1} value={index + 1}>{new Date(2026, index, 1).toLocaleString("es-AR", { month: "long" })}</option>)}</select></label>
+            <label className="field-label"><span>Año</span><input type="number" value={commissionPeriod.year} min="2020" max="2100" onChange={(event) => setCommissionPeriod({ ...commissionPeriod, year: Number(event.target.value) })} /></label>
+            <button type="submit" className="secondary">Calcular</button>
+          </form>
+          <Metric label="Comisión a sueldos" value={money(commissionTotal)} />
+          <div className="commission-sync-actions">
+            <button type="button" onClick={syncCommissions} disabled={!canWrite || commissionTotal <= 0}>Registrar en gastos</button>
+            <span>{commissionRegistered ? `${commissionRegistered} ya registradas en Gastos` : "Se crea como gasto de Sueldos al cierre del mes."}</span>
+          </div>
+        </div>
+        {commissionMessage && <p className="success-text">{commissionMessage}</p>}
+        <div className="commercial-account">
+          <div className="section-title"><h3>Cuenta de vendedores</h3><span>Aportes suman a favor; retiros descuentan saldo y comisión del mes.</span></div>
+          <div className="account-grid">
+            {accountRows.map((row) => <div className="account-card" key={row.vendedorId}>
+              <div><strong>{row.vendedor}</strong><span>{row.activo ? "Activo" : "Inactivo"}</span></div>
+              <div className="account-metrics">
+                <span>Saldo cuenta <strong className={row.saldoCuenta >= 0 ? "positive-money" : "negative-money"}>{money(row.saldoCuenta)}</strong></span>
+                <span>Comisión neta <strong>{money(row.comisionNeta)}</strong></span>
+                <small>Aportes {money(row.aportesMes)} · Retiros {money(row.retirosMes)}</small>
+              </div>
+            </div>)}
+          </div>
+          <form className="account-form" onSubmit={createAccountMovement}>
+            <label className="field-label"><span>Vendedor</span><select name="vendedorId" required defaultValue=""><option value="" disabled>Elegir</option>{vendors.map((vendor) => <option value={vendor.id} key={vendor.id}>{vendor.nombre}</option>)}</select></label>
+            <label className="field-label"><span>Tipo</span><select name="tipo" defaultValue="APORTE"><option value="APORTE">Aporte</option><option value="RETIRO">Retiro</option><option value="AJUSTE">Ajuste</option></select></label>
+            <label className="field-label"><span>Fecha</span><input name="fecha" type="date" defaultValue={dateInput()} required /></label>
+            <label className="field-label"><span>Monto</span><input name="monto" type="number" step="0.01" min="0.01" required placeholder="0,00" /></label>
+            <label className="field-label"><span>Método</span><select name="metodoPago"><option value="">Sin método</option><option value="EFECTIVO">Efectivo</option><option value="TRANSFERENCIA">Transferencia</option><option value="TARJETA">Tarjeta</option><option value="CHEQUE">Cheque</option><option value="OTRO">Otro</option></select></label>
+            <label className="field-label account-description"><span>Descripción</span><input name="descripcion" placeholder="Ej. Aporte para mercadería" required /></label>
+            <label className="field-label"><span>Comprobante</span><input name="comprobante" placeholder="Opcional" /></label>
+            <label className="field-label account-notes"><span>Observaciones</span><input name="observaciones" placeholder="Detalle opcional" /></label>
+            <button disabled={!canWrite}>Registrar movimiento</button>
+          </form>
+          <div className="account-movement-list">
+            {accountMovements.slice(0, 8).map((row) => <div className="account-movement-row" key={row.id}><div><strong>{row.tipo === "APORTE" ? "Aporte" : row.tipo === "RETIRO" ? "Retiro" : "Ajuste"} · {row.vendedor?.nombre}</strong><span>{formatDate(row.fecha)} · {row.metodoPago ?? "Sin método"} · {row.usuario?.nombre ?? "Usuario"}</span><small>{row.descripcion}</small></div><strong className={row.tipo === "RETIRO" ? "negative-money" : "positive-money"}>{money(row.monto)}</strong>{isAdmin && <button type="button" className="icon-button" onClick={() => removeAccountMovement(row)} title="Eliminar movimiento"><Trash2 size={16} /></button>}</div>)}
+            {!accountMovements.length && <p className="muted">Todavía no hay aportes ni retiros registrados.</p>}
+          </div>
+        </div>
         <div className="vendor-list vendor-list-grid">{vendors.map((vendor) => <button type="button" className="vendor-card vendor-stats-card" key={vendor.id} onClick={() => openVendor(vendor)}><div><strong>{vendor.nombre}</strong><span>{vendor.activo ? "Activo" : "Inactivo"} · {Number(vendor.porcentajeComision)}% comisión</span></div><div className="vendor-stats"><span>Ventas</span><strong>{money(vendor.ventasTotal ?? 0)}</strong><small>{vendor.boletasTotal ?? 0} boleta{(vendor.boletasTotal ?? 0) === 1 ? "" : "s"}</small><small>Comisión {money(vendor.comisionTotal ?? 0)}</small></div></button>)}{!vendors.length && <p className="muted">No hay vendedores cargados.</p>}</div>
       </>}
       {tab === "suppliers" && <>

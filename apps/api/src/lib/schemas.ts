@@ -126,6 +126,17 @@ export const gastoSchema = z.object({
   observaciones: z.string().transform(cleanText).optional().nullable()
 });
 
+export const cuentaComercialMovimientoSchema = z.object({
+  vendedorId: z.string().uuid(),
+  tipo: z.enum(["APORTE", "RETIRO", "AJUSTE"]),
+  fecha: z.coerce.date().default(() => new Date()),
+  monto: moneySchema,
+  metodoPago: z.enum(["EFECTIVO", "TRANSFERENCIA", "TARJETA", "CHEQUE", "OTRO"]).optional().nullable(),
+  descripcion: text(250),
+  comprobante: optionalText(120),
+  observaciones: z.string().transform(cleanText).optional().nullable()
+});
+
 export const aumentoPreciosSchema = z.object({
   categoriaId: z.string().uuid().optional().nullable(),
   porcentaje: z.coerce.number().min(-99).max(1000),

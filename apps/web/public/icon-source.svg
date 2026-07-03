@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <rect width="512" height="512" fill="#e21b23"/>
+  <g fill="#ffffff" font-family="Inter, Arial, sans-serif" font-weight="800" text-anchor="middle">
+    <text x="256" y="290" font-size="180" letter-spacing="4">PM</text>
+    <text x="256" y="360" font-size="46" letter-spacing="8" opacity="0.92">PEREZ</text>
+  </g>
+</svg>

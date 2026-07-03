@@ -64,6 +64,12 @@ enum GastoCategoria {
   OTRO
 }
 
+enum CuentaComercialTipo {
+  APORTE
+  RETIRO
+  AJUSTE
+}
+
 model User {
   id            String            @id @default(uuid()) @db.Uuid
   nombre        String            @db.VarChar(100)
@@ -76,6 +82,7 @@ model User {
   remitos       Remito[]
   movimientos   MovimientoStock[]
   gastos        Gasto[]
+  cuentaComercialMovimientos CuentaComercialMovimiento[]
   auditoria     AuditLog[]
   createdAt     DateTime          @default(now()) @map("created_at")
   updatedAt     DateTime          @updatedAt @map("updated_at")
@@ -112,6 +119,7 @@ model Vendedor {
   porcentajeComision  Decimal  @default(0) @map("porcentaje_comision") @db.Decimal(5, 2)
   activo              Boolean  @default(true)
   remitos             Remito[]
+  cuentaMovimientos   CuentaComercialMovimiento[]
   createdAt           DateTime @default(now()) @map("created_at")
   updatedAt           DateTime @updatedAt @map("updated_at")
 
@@ -299,6 +307,28 @@ model Gasto {
   @@index([fecha])
   @@index([categoria])
   @@map("gastos")
+}
+
+model CuentaComercialMovimiento {
+  id            String              @id @default(uuid()) @db.Uuid
+  vendedorId    String              @map("vendedor_id") @db.Uuid
+  tipo          CuentaComercialTipo
+  fecha         DateTime            @db.Date
+  monto         Decimal             @db.Decimal(12, 2)
+  metodoPago    MetodoPago?         @map("metodo_pago")
+  descripcion   String              @db.VarChar(250)
+  comprobante   String?             @db.VarChar(120)
+  observaciones String?
+  usuarioId     String              @map("usuario_id") @db.Uuid
+  vendedor      Vendedor            @relation(fields: [vendedorId], references: [id])
+  usuario       User                @relation(fields: [usuarioId], references: [id])
+  createdAt     DateTime            @default(now()) @map("created_at")
+  updatedAt     DateTime            @updatedAt @map("updated_at")
+
+  @@index([vendedorId])
+  @@index([fecha])
+  @@index([tipo])
+  @@map("cuentas_comerciales_movimientos")
 }
 
 model AuditLog {
