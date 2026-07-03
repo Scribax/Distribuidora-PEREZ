@@ -155,36 +155,39 @@ export function CommercialsView({ api, isAdmin, canWrite }: { api: ReturnType<ty
   }
   const activeCount = vendors.filter((vendor) => vendor.activo).length;
   const activeSuppliers = suppliers.filter((supplier) => supplier.activo).length;
-  const commissionTotal = commissionRows.reduce((sum, row) => sum + Number(row.comisionTotal ?? 0), 0);
+  const commissionGross = commissionRows.reduce((sum, row) => sum + Number(row.comisionTotal ?? 0), 0);
+  const commissionWithdrawals = commissionRows.reduce((sum, row) => sum + Number(row.retirosMes ?? 0), 0);
+  const commissionTotal = commissionRows.reduce((sum, row) => sum + Number(row.comisionNeta ?? row.comisionTotal ?? 0), 0);
   const commissionRegistered = commissionRows.filter((row) => row.gastoId).length;
+  const periodLabel = `${new Date(2026, commissionPeriod.month - 1, 1).toLocaleString("es-AR", { month: "long" })} ${commissionPeriod.year}`;
   return <div className="client-page">
     <section className="panel vendor-panel wide">
       <div className="detail-head"><div><h2>Comerciales</h2><span>Vendedores para comisiones y proveedores para compras.</span></div>{tab === "vendors" ? <button type="button" onClick={() => { setError(""); setSelectedVendor(null); setVendorModal("create"); }}>Nuevo vendedor</button> : canWrite && <button type="button" onClick={() => { setError(""); setSelectedSupplier(null); setSupplierModal("create"); }}>Nuevo proveedor</button>}</div>
       <div className="tabs compact-tabs"><button type="button" className={tab === "vendors" ? "active" : ""} onClick={() => { setVendorDetail(null); setTab("vendors"); }}>Vendedores</button><button type="button" className={tab === "suppliers" ? "active" : ""} onClick={() => { setVendorDetail(null); setTab("suppliers"); }}>Proveedores</button></div>
       {tab === "vendors" && <>
-        <div className="section-title"><h3>Vendedores</h3><span>{activeCount} activos · comisiones aplicadas en ventas.</span></div>
+        <div className="section-title"><h3>Vendedores</h3><span>{activeCount} activos · arriba ves el mes elegido; abajo ves el histórico activo.</span></div>
         <div className="commission-sync">
           <form className="commission-sync-form" onSubmit={previewCommissions}>
             <label className="field-label"><span>Mes</span><select value={commissionPeriod.month} onChange={(event) => setCommissionPeriod({ ...commissionPeriod, month: Number(event.target.value) })}>{Array.from({ length: 12 }, (_, index) => <option key={index + 1} value={index + 1}>{new Date(2026, index, 1).toLocaleString("es-AR", { month: "long" })}</option>)}</select></label>
             <label className="field-label"><span>Año</span><input type="number" value={commissionPeriod.year} min="2020" max="2100" onChange={(event) => setCommissionPeriod({ ...commissionPeriod, year: Number(event.target.value) })} /></label>
             <button type="submit" className="secondary">Calcular</button>
           </form>
-          <Metric label="Comisión a sueldos" value={money(commissionTotal)} />
+          <Metric label={`A pagar en ${periodLabel}`} value={money(commissionTotal)} />
           <div className="commission-sync-actions">
             <button type="button" onClick={syncCommissions} disabled={!canWrite || commissionTotal <= 0}>Registrar en gastos</button>
-            <span>{commissionRegistered ? `${commissionRegistered} ya registradas en Gastos` : "Se crea como gasto de Sueldos al cierre del mes."}</span>
+            <span>{commissionRegistered ? `${commissionRegistered} ya registradas en Gastos` : `Comisión del mes ${money(commissionGross)} - retiros ${money(commissionWithdrawals)}.`}</span>
           </div>
         </div>
         {commissionMessage && <p className="success-text">{commissionMessage}</p>}
         <div className="commercial-account">
-          <div className="section-title"><h3>Cuenta de vendedores</h3><span>Aportes suman a favor; retiros descuentan saldo y comisión del mes.</span></div>
+          <div className="section-title"><h3>Cuenta de vendedores</h3><span>Controla plata que ponen o sacan. Los retiros bajan lo que se paga de comisión del mes.</span></div>
           <div className="account-grid">
             {accountRows.map((row) => <div className="account-card" key={row.vendedorId}>
               <div><strong>{row.vendedor}</strong><span>{row.activo ? "Activo" : "Inactivo"}</span></div>
               <div className="account-metrics">
-                <span>Saldo cuenta <strong className={row.saldoCuenta >= 0 ? "positive-money" : "negative-money"}>{money(row.saldoCuenta)}</strong></span>
-                <span>Comisión neta <strong>{money(row.comisionNeta)}</strong></span>
-                <small>Aportes {money(row.aportesMes)} · Retiros {money(row.retirosMes)}</small>
+                <span>Saldo a favor/deuda <strong className={row.saldoCuenta >= 0 ? "positive-money" : "negative-money"}>{money(row.saldoCuenta)}</strong></span>
+                <span>A pagar este mes <strong>{money(row.comisionNeta)}</strong></span>
+                <small>Comisión mes {money(row.comisionTotal)} · retiros {money(row.retirosMes)}</small>
               </div>
             </div>)}
           </div>
@@ -204,7 +207,7 @@ export function CommercialsView({ api, isAdmin, canWrite }: { api: ReturnType<ty
             {!accountMovements.length && <p className="muted">Todavía no hay aportes ni retiros registrados.</p>}
           </div>
         </div>
-        <div className="vendor-list vendor-list-grid">{vendors.map((vendor) => <button type="button" className="vendor-card vendor-stats-card" key={vendor.id} onClick={() => openVendor(vendor)}><div><strong>{vendor.nombre}</strong><span>{vendor.activo ? "Activo" : "Inactivo"} · {Number(vendor.porcentajeComision)}% comisión</span></div><div className="vendor-stats"><span>Ventas</span><strong>{money(vendor.ventasTotal ?? 0)}</strong><small>{vendor.boletasTotal ?? 0} boleta{(vendor.boletasTotal ?? 0) === 1 ? "" : "s"}</small><small>Comisión {money(vendor.comisionTotal ?? 0)}</small></div></button>)}{!vendors.length && <p className="muted">No hay vendedores cargados.</p>}</div>
+        <div className="vendor-list vendor-list-grid">{vendors.map((vendor) => <button type="button" className="vendor-card vendor-stats-card" key={vendor.id} onClick={() => openVendor(vendor)}><div><strong>{vendor.nombre}</strong><span>{vendor.activo ? "Activo" : "Inactivo"} · {Number(vendor.porcentajeComision)}% comisión</span></div><div className="vendor-stats"><span>Histórico activo</span><strong>{money(vendor.ventasTotal ?? 0)}</strong><small>Ventas de {vendor.boletasTotal ?? 0} boleta{(vendor.boletasTotal ?? 0) === 1 ? "" : "s"} activas</small><small>Comisión histórica {money(vendor.comisionTotal ?? 0)}</small></div></button>)}{!vendors.length && <p className="muted">No hay vendedores cargados.</p>}</div>
       </>}
       {tab === "suppliers" && <>
         <div className="section-title"><h3>Proveedores</h3><span>{activeSuppliers} activos · disponibles al cargar compras.</span></div>
@@ -265,15 +268,15 @@ function VendorDetail({ vendor, onClose, onEdit, onPdf }: { vendor: any; onClose
         <div className="table-actions"><button type="button" className="secondary" onClick={onEdit}>Editar</button><button type="button" className="icon-button" onClick={onClose} title="Cerrar detalle"><X size={18} /></button></div>
       </div>
       <div className="detail-grid">
-        <Metric label="Total vendido" value={money(vendor.ventasTotal ?? 0)} />
-        <Metric label="Comisión" value={money(vendor.comisionTotal ?? 0)} />
-        <Metric label="Boletas" value={String(vendor.boletasTotal ?? 0)} />
+        <Metric label="Ventas históricas activas" value={money(vendor.ventasTotal ?? 0)} />
+        <Metric label="Comisión histórica" value={money(vendor.comisionTotal ?? 0)} />
+        <Metric label="Boletas activas" value={String(vendor.boletasTotal ?? 0)} />
         <Metric label="Clientes" value={String(vendor.clientesTotal ?? clientes.length)} />
       </div>
       <div className="vendor-detail-grid">
         <div className="vendor-sales-list">
           <div className="vendor-sales-head">
-            <div className="section-title"><h3>Ventas realizadas</h3><span>{filteredRemitos.length} de {remitos.length} boletas activas.</span></div>
+            <div className="section-title"><h3>Histórico activo de ventas</h3><span>{filteredRemitos.length} de {remitos.length} boletas activas de este vendedor.</span></div>
             <label className="search-field compact-search">
               <Search size={16} />
               <input value={salesSearch} onChange={(event) => setSalesSearch(event.target.value)} placeholder="Buscar boleta, cliente o producto" />
