@@ -62,21 +62,21 @@ export function ClientsView({ api, canWrite, canEditBalance }: { api: ReturnType
     return filteredCobros.reduce((sum, c) => sum + Number(c.saldo), 0);
   }, [filteredCobros]);
 
-  const buildMensaje = (nombre: string, saldo: number) => {
+  const buildMensaje = (saldo: number) => {
     const saldoFmt = money(saldo);
     return [
-      `Hola ${nombre}:`,
+      "¡Hola!",
       `Le recuerdo el saldo debido de ${saldoFmt}.`,
-      `Para transferir, el Alias: perezmartin.pagos a nombre de Eduardo Gregorio Perez.`,
-      `Aviseme si quiere que pase a cobrar en efectivo y si hace falta que lleve alg\u00FAn pedido.`,
-      `Muchas gracias.`,
-      `Distribuidora Perez Martin`,
-    ].join("\n");
+      "Para transferir, el Alias: perezmartin.pagos a nombre de Eduardo Gregorio Perez.",
+      "Aviseme si quiere que pase a cobrar en efectivo y si hace falta que lleve alg\u00FAn pedido.",
+      "Muchas gracias.",
+      "Distribuidora Perez Martin"
+    ].join("\n\n");
   };
 
   const copyMessage = async (id: string, cobro: any) => {
     try {
-      const texto = buildMensaje(cobro.cliente_nombre, cobro.saldo);
+      const texto = buildMensaje(cobro.saldo);
       await navigator.clipboard.writeText(texto);
       setCopiedId(id);
       setTimeout(() => setCopiedId(null), 2000);
@@ -86,7 +86,7 @@ export function ClientsView({ api, canWrite, canEditBalance }: { api: ReturnType
   };
 
   const registrarYEnviar = async (cobro: any) => {
-    const texto = buildMensaje(cobro.cliente_nombre, cobro.saldo);
+    const texto = buildMensaje(cobro.saldo);
     const waUrl = `https://wa.me/${cobro.telefono_whatsapp}?text=${encodeURIComponent(texto)}`;
     const win = window.open(waUrl, "_blank", "noopener,noreferrer");
     if (!win) {

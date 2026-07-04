@@ -121,16 +121,16 @@ function normalizePhoneForWhatsApp(telefono?: string | null, defaultCountryCode 
   return `${countryCode}${digits}`;
 }
 
-function buildCobroMessage(row: { cliente_nombre: string; saldo: number }): string {
+function buildCobroMessage(row: { saldo: number }): string {
   const saldoFmt = money(row.saldo);
   return [
-    `Hola ${row.cliente_nombre}:`,
+    "¡Hola!",
     `Le recuerdo el saldo debido de ${saldoFmt}.`,
-    `Para transferir, el Alias: perezmartin.pagos a nombre de Eduardo Gregorio Perez.`,
-    `Aviseme si quiere que pase a cobrar en efectivo y si hace falta que lleve alg\u00FAn pedido.`,
-    `Muchas gracias.`,
-    `Distribuidora Perez Martin`
-  ].join("\n");
+    "Para transferir, el Alias: perezmartin.pagos a nombre de Eduardo Gregorio Perez.",
+    "Aviseme si quiere que pase a cobrar en efectivo y si hace falta que lleve alg\u00FAn pedido.",
+    "Muchas gracias.",
+    "Distribuidora Perez Martin"
+  ].join("\n\n");
 }
 
 clientsRouter.get("/cobros-pendientes", async (req, res) => {
@@ -183,7 +183,6 @@ clientsRouter.get("/cobros-pendientes", async (req, res) => {
       const telefonoWhatsapp = normalizePhoneForWhatsApp(remito.cliente.telefono);
 
       const mensaje = buildCobroMessage({
-        cliente_nombre: remito.cliente.nombre,
         saldo
       });
 
