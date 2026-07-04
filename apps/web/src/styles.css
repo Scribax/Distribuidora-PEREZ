@@ -5170,3 +5170,202 @@ tr:hover td {
     border-radius: 18px 18px 0 0;
   }
 }
+
+/* UI v2 - Compras y Gastos */
+.purchase-page,
+.expenses-page {
+  display: grid;
+  gap: 16px;
+}
+.purchase-page > .panel.wide,
+.expenses-page > .panel.wide,
+.expense-form-panel,
+.purchase-builder {
+  padding: 18px;
+}
+.purchase-page > .panel.wide,
+.expenses-page > .panel.wide {
+  display: grid;
+  gap: 14px;
+  border-left: 5px solid var(--brand-blue);
+}
+.purchase-page > .panel.wide > h2,
+.expense-form-panel h2,
+.purchase-builder h2 {
+  margin: 0;
+  color: var(--text);
+  font-size: 20px;
+}
+.purchase-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.purchase-builder {
+  display: grid;
+  gap: 16px;
+  border-left: 5px solid var(--brand-red);
+}
+.purchase-detail-slot {
+  display: contents;
+}
+.purchase-detail-slot > .empty-state {
+  display: none;
+}
+.supplier-picker {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(220px, 1fr);
+  gap: 10px;
+  grid-column: 1 / -1;
+}
+.purchase-add-line {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) minmax(120px, 0.4fr) minmax(150px, 0.45fr) auto;
+  gap: 10px;
+  align-items: end;
+}
+.purchase-check {
+  grid-column: 1 / -1;
+  min-height: 34px;
+}
+.purchase-add-line > button {
+  grid-column: 1 / -1;
+  justify-self: start;
+  min-width: 150px;
+}
+.purchase-detail-modal {
+  width: min(880px, calc(100vw - 28px));
+  max-height: calc(100vh - 40px);
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-left: 5px solid var(--brand-blue);
+  border-radius: 16px;
+  background: var(--surface);
+  box-shadow: 0 24px 70px var(--shadow-strong);
+}
+.expenses-page {
+  grid-template-columns: minmax(0, 1fr);
+}
+.expenses-page > .panel.wide {
+  border-left-color: var(--brand-red);
+}
+.expenses-page .detail-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 240px);
+  align-items: center;
+}
+.expenses-page .detail-head .metric {
+  min-height: 82px;
+  padding: 13px;
+  border-left: 4px solid var(--brand-red);
+}
+.filters-wide {
+  display: grid;
+  grid-template-columns: minmax(200px, 1fr) minmax(160px, 0.75fr) 140px 140px auto auto;
+  gap: 10px;
+  align-items: stretch;
+  padding: 12px;
+}
+.expense-list {
+  display: grid;
+  gap: 10px;
+}
+.expense-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(120px, auto) 40px;
+  gap: 12px;
+  align-items: center;
+  padding: 13px;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--brand-red);
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: 0 1px 2px var(--shadow);
+}
+.expense-row:hover {
+  box-shadow: 0 10px 24px var(--shadow);
+}
+.expense-row div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.expense-row strong {
+  color: var(--text);
+}
+.expense-row span,
+.expense-row small {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.expense-row > strong {
+  font-size: 18px;
+  text-align: right;
+  white-space: nowrap;
+}
+.expense-form-panel {
+  display: grid;
+  gap: 12px;
+  border-left: 5px solid var(--brand-blue);
+}
+.expense-form {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+.expense-description {
+  grid-column: span 2;
+}
+.expense-notes,
+.expense-form .error,
+.expense-form button {
+  grid-column: 1 / -1;
+}
+.expense-form button {
+  justify-self: start;
+  min-width: 160px;
+}
+.purchase-page .table-wrap,
+.expenses-page .table-wrap {
+  border-radius: 14px;
+}
+@media (max-width: 1180px) {
+  .filters-wide,
+  .expenses-page .detail-head,
+  .expense-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .purchase-add-line {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 900px) {
+  .supplier-picker,
+  .purchase-add-line,
+  .filters-wide,
+  .expenses-page .detail-head,
+  .expense-form,
+  .expense-description,
+  .expense-row {
+    grid-template-columns: 1fr;
+  }
+  .purchase-add-line > button,
+  .expense-form button,
+  .filters-wide button {
+    width: 100%;
+    min-width: 0;
+  }
+  .expense-row > strong {
+    text-align: left;
+  }
+  .purchase-detail-modal {
+    width: 100%;
+    max-height: 90vh;
+    border-radius: 18px 18px 0 0;
+  }
+}
