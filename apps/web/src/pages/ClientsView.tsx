@@ -62,20 +62,15 @@ export function ClientsView({ api, canWrite, canEditBalance }: { api: ReturnType
     return filteredCobros.reduce((sum, c) => sum + Number(c.saldo), 0);
   }, [filteredCobros]);
 
-  // String.fromCodePoint garantiza emojis correctos independientemente del encoding del archivo
   const buildMensaje = (nombre: string, saldo: number) => {
     const saldoFmt = money(saldo);
-    const wave  = String.fromCodePoint(0x1F44B, 0x1F3FB); // 👋🏻
-    const bang  = String.fromCodePoint(0x203C, 0xFE0F);   // ‼️
-    const smile = String.fromCodePoint(0x1F603);           // 😃
-    const cap   = String.fromCodePoint(0x1F9E2);           // 🧢
     return [
-      "\u00A1Hola " + nombre + "! " + wave,
-      "Le recuerdo el saldo debido de " + saldoFmt + " " + bang,
-      "Para transferir, el Alias: perezmartin.pagos a nombre de Eduardo Gregorio Perez.",
-      "Aviseme si quiere que pase a cobrar en efectivo y si hace falta que lleve alg\u00FAn pedido.",
-      "Muchas gracias " + smile,
-      "Distribuidora Perez Martin " + cap,
+      `Hola ${nombre}:`,
+      `Le recuerdo el saldo debido de ${saldoFmt}.`,
+      `Para transferir, el Alias: perezmartin.pagos a nombre de Eduardo Gregorio Perez.`,
+      `Aviseme si quiere que pase a cobrar en efectivo y si hace falta que lleve alg\u00FAn pedido.`,
+      `Muchas gracias.`,
+      `Distribuidora Perez Martin`,
     ].join("\n");
   };
 
