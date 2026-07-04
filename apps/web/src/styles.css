@@ -5369,3 +5369,247 @@ tr:hover td {
     border-radius: 18px 18px 0 0;
   }
 }
+
+/* UI v2 - Balance e Informes */
+.balance-page,
+.reports-page {
+  display: grid;
+  gap: 16px;
+}
+.balance-panel,
+.reports-page > .panel.wide,
+.audit-panel {
+  display: grid;
+  gap: 16px;
+  padding: 18px;
+  border-left: 5px solid var(--brand-blue);
+}
+.reports-page > .panel.wide {
+  border-left-color: var(--brand-red);
+}
+.balance-filters,
+.reports-page > .panel.wide > .filters {
+  display: grid;
+  grid-template-columns: 140px minmax(180px, 240px) auto;
+  gap: 10px;
+  align-items: stretch;
+  width: fit-content;
+  max-width: 100%;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: 0 1px 2px var(--shadow);
+}
+.reports-page > .panel.wide > h2,
+.balance-panel > h2 {
+  margin: 0;
+  color: var(--text);
+  font-size: 20px;
+}
+.balance-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 12px;
+}
+.balance-metrics .metric {
+  min-height: 104px;
+  padding: 15px;
+  border-left: 4px solid var(--brand-red);
+}
+.balance-metrics .metric:nth-child(2),
+.balance-metrics .metric:nth-child(6) {
+  border-left-color: var(--brand-blue);
+}
+.balance-metrics .metric:nth-child(3),
+.balance-metrics .metric:nth-child(5) {
+  border-left-color: var(--success);
+}
+.balance-metrics .metric:nth-child(4) {
+  border-left-color: var(--brand-yellow);
+}
+.balance-metrics .metric strong {
+  margin-top: 9px;
+  font-size: clamp(21px, 2vw, 27px);
+  line-height: 1.08;
+  overflow-wrap: anywhere;
+}
+.cashbox-panel {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface-soft);
+}
+.cashbox-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+.cashbox-card {
+  display: grid;
+  gap: 6px;
+  padding: 13px;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--brand-blue);
+  border-radius: 12px;
+  background: var(--surface);
+}
+.cashbox-card span,
+.cashbox-card small {
+  color: var(--muted);
+  font-size: 12px;
+}
+.cashbox-card strong {
+  color: var(--text);
+  font-size: 20px;
+  overflow-wrap: anywhere;
+}
+.balance-chart {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  overflow: hidden;
+}
+.report-list {
+  display: grid;
+  gap: 10px;
+}
+.report-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--brand-red);
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: 0 1px 2px var(--shadow);
+}
+.report-row strong {
+  color: var(--text);
+}
+.report-row:hover {
+  box-shadow: 0 10px 24px var(--shadow);
+}
+.audit-panel {
+  border-left-color: var(--brand-blue);
+}
+.audit-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
+  gap: 10px;
+  align-items: stretch;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: 0 1px 2px var(--shadow);
+}
+.audit-filters button {
+  min-width: 96px;
+}
+.audit-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+.audit-list {
+  display: grid;
+  gap: 10px;
+}
+.audit-row {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: 0 1px 2px var(--shadow);
+  overflow: hidden;
+}
+.audit-row:hover {
+  box-shadow: 0 10px 24px var(--shadow);
+}
+.audit-main {
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 13px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+.audit-main:hover {
+  background: var(--surface-soft);
+  box-shadow: none;
+}
+.audit-main div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.audit-main strong {
+  color: var(--text);
+}
+.audit-main span {
+  color: var(--muted);
+}
+.audit-tags {
+  display: flex !important;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.audit-changes {
+  display: grid;
+  gap: 8px;
+  padding: 0 13px 13px;
+}
+.audit-changes div {
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  background: var(--surface-soft);
+}
+.audit-changes span {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+@media (max-width: 900px) {
+  .balance-filters,
+  .reports-page > .panel.wide > .filters,
+  .audit-toolbar,
+  .audit-main,
+  .report-row {
+    grid-template-columns: 1fr;
+    width: 100%;
+  }
+  .audit-toolbar,
+  .report-row {
+    display: grid;
+    align-items: stretch;
+  }
+  .report-row .table-actions,
+  .audit-toolbar .pager {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+  .audit-tags {
+    justify-content: flex-start;
+  }
+  .balance-filters button,
+  .reports-page > .panel.wide > .filters button,
+  .audit-filters button {
+    width: 100%;
+  }
+}
