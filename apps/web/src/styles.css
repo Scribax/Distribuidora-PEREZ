@@ -4139,3 +4139,585 @@ tr:hover td {
     min-height: 92px;
   }
 }
+
+/* UI v2 - Ventas y Clientes */
+.remitos-layout,
+.client-page {
+  display: grid;
+  gap: 16px;
+}
+.sales-board,
+.client-list-panel {
+  display: grid;
+  gap: 14px;
+}
+.sales-summary,
+.client-overview {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+.client-overview {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.sales-summary .metric,
+.client-overview .metric {
+  position: relative;
+  min-height: 96px;
+  padding: 15px;
+  border-left: 4px solid var(--brand-red);
+}
+.sales-summary .metric:nth-child(2),
+.client-overview .metric:nth-child(2) {
+  border-left-color: var(--brand-blue);
+}
+.sales-summary .metric:nth-child(3),
+.client-overview .metric:nth-child(3) {
+  border-left-color: var(--brand-yellow);
+}
+.sales-summary .metric:nth-child(4) {
+  border-left-color: var(--success);
+}
+.sales-summary .metric span,
+.client-overview .metric span {
+  font-size: 13px;
+  color: var(--muted);
+}
+.sales-summary .metric strong,
+.client-overview .metric strong {
+  margin-top: 9px;
+  color: var(--text);
+  font-size: clamp(21px, 2vw, 28px);
+  line-height: 1.08;
+}
+.sales-list-panel,
+.client-list-panel,
+.remito-builder,
+.import-history-panel {
+  padding: 18px;
+}
+.detail-head,
+.sales-head {
+  align-items: center;
+}
+.detail-head h2,
+.sales-head h2 {
+  margin: 0 0 4px;
+  color: var(--text);
+  font-size: 20px;
+}
+.detail-head span,
+.sales-head span {
+  color: var(--muted);
+}
+.sales-head > button {
+  display: inline-flex;
+  align-items: center;
+  min-width: 132px;
+  justify-content: center;
+  background: var(--brand-red);
+  color: #ffffff;
+}
+.sales-head > button:hover {
+  background: var(--brand-red-dark);
+}
+.sales-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
+  align-items: stretch;
+  gap: 10px;
+  padding: 12px;
+  min-width: 0;
+}
+.sales-filters input,
+.sales-filters select,
+.sales-filters .picker-trigger {
+  min-height: 42px;
+}
+.sales-filters button {
+  min-width: 96px;
+}
+.sales-filters > input:first-child {
+  min-width: 88px;
+}
+.sales-list-toolbar,
+.client-list-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+.compact-pager {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.compact-pager span {
+  color: var(--muted);
+  white-space: nowrap;
+}
+.sales-list,
+.client-list {
+  display: grid;
+  gap: 10px;
+}
+.sale-card,
+.client-card {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: 0 1px 2px var(--shadow);
+}
+.sale-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+}
+.sale-card:hover,
+.client-card:hover,
+.client-card.active {
+  border-color: color-mix(in srgb, var(--brand-blue) 28%, var(--line));
+  box-shadow: 0 10px 24px var(--shadow);
+}
+.sale-main {
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(130px, 0.65fr) minmax(170px, 1fr) minmax(150px, 0.85fr) minmax(190px, 0.95fr);
+  gap: 12px;
+  align-items: center;
+  padding: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+.sale-main:hover {
+  background: transparent;
+  box-shadow: none;
+}
+.sale-title,
+.sale-client,
+.sale-money {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.sale-title strong,
+.sale-client strong,
+.sale-money strong {
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sale-title span,
+.sale-client span,
+.sale-money span {
+  color: var(--muted);
+  font-size: 12px;
+}
+.sale-money {
+  text-align: right;
+}
+.sale-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: var(--secondary);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+}
+.status-chip.pagada,
+.status-chip.activo {
+  background: var(--success-soft);
+  color: var(--success);
+}
+.status-chip.parcial {
+  background: var(--warning-soft);
+  color: #b7791f;
+}
+.status-chip.pendiente,
+.status-chip.cancelado {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+.sale-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.sale-actions button {
+  min-height: 36px;
+  padding: 8px 10px;
+  font-size: 13px;
+}
+.client-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(130px, 170px) 86px;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  padding: 13px 14px;
+  color: var(--text);
+  text-align: left;
+}
+.client-card:hover,
+.client-card.active {
+  background: var(--surface);
+}
+.client-card.active {
+  border-color: rgba(223, 31, 45, 0.3);
+  box-shadow: inset 4px 0 0 var(--brand-red), 0 1px 2px var(--shadow);
+}
+.client-card div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.client-card strong {
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.client-card span,
+.client-card small {
+  color: var(--muted);
+}
+.client-card small {
+  justify-self: end;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: var(--success-soft);
+  color: var(--success);
+  font-size: 11px;
+  font-weight: 900;
+}
+.search {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+}
+.search button {
+  min-width: 96px;
+}
+.remito-builder {
+  display: grid;
+  gap: 16px;
+  border-left: 5px solid var(--brand-blue);
+}
+.remito-builder > h2 {
+  margin: 0;
+  color: var(--text);
+}
+.remito-builder > h2::after {
+  content: none;
+}
+.step-block {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 12px;
+  padding: 14px;
+  border-left: 0;
+  background: var(--surface-soft);
+}
+.step-badge {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--brand-red);
+  color: #ffffff;
+  font-weight: 900;
+  box-shadow: none;
+}
+.step-title {
+  display: grid;
+  gap: 3px;
+  margin-bottom: 12px;
+}
+.step-title strong {
+  color: var(--text);
+}
+.step-title span {
+  color: var(--muted);
+}
+.field-card {
+  display: grid;
+  gap: 7px;
+  padding: 12px;
+  background: var(--surface);
+}
+.field-card span,
+.field-label span {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 900;
+}
+.field-card small {
+  color: var(--muted);
+}
+.remito-detail-modal,
+.client-detail-modal,
+.remito-edit-modal,
+.client-edit-modal {
+  border-radius: 16px;
+  box-shadow: 0 24px 70px var(--shadow-strong);
+}
+.remito-focus-card,
+.client-hero {
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: var(--surface-soft);
+}
+.remito-focus-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  padding: 16px;
+}
+.remito-focus-card.pending {
+  border-left: 5px solid var(--danger);
+}
+.remito-focus-card.paid {
+  border-left: 5px solid var(--success);
+}
+.remito-focus-card strong {
+  display: block;
+  margin-top: 4px;
+  color: var(--text);
+  font-size: clamp(24px, 3vw, 34px);
+}
+.remito-focus-card small {
+  color: var(--muted);
+}
+.remito-focus-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.remito-summary-list,
+.client-info-grid,
+.client-profile .detail-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+.remito-summary-list div,
+.info-item {
+  display: grid;
+  gap: 5px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+}
+.remito-summary-list span,
+.info-item span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+.remito-summary-list strong,
+.info-item strong {
+  color: var(--text);
+}
+.line-items,
+.client-remito-list,
+.historical-list {
+  display: grid;
+  gap: 8px;
+}
+.line-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 11px;
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  background: var(--surface);
+}
+.line-item span {
+  color: var(--muted);
+}
+.client-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px;
+  border-left: 5px solid var(--brand-red);
+}
+.client-hero h2 {
+  margin: 0 0 4px;
+  color: var(--text);
+}
+.client-hero span {
+  color: var(--muted);
+}
+.client-remittances {
+  display: grid;
+  gap: 9px;
+}
+.client-remittances h3 {
+  margin: 0;
+  color: var(--text);
+}
+.client-remittances > span {
+  color: var(--muted);
+}
+.client-remito-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(150px, auto) minmax(170px, auto) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 13px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+}
+.client-remito-card.pending {
+  border-left: 4px solid var(--danger);
+}
+.client-remito-card div {
+  display: grid;
+  gap: 4px;
+}
+.client-remito-card span {
+  color: var(--muted);
+  font-size: 12px;
+}
+.client-remito-actions {
+  display: flex;
+  gap: 8px;
+}
+.client-remito-detail {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr);
+  gap: 10px;
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--surface-soft);
+}
+.client-edit-box,
+.client-danger-zone {
+  padding-top: 4px;
+}
+.client-danger-zone {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--danger-line);
+  border-radius: 14px;
+  background: var(--danger-soft);
+}
+.client-danger-zone strong {
+  color: var(--danger);
+}
+.client-danger-zone span {
+  color: var(--muted);
+}
+.import-history-panel textarea {
+  resize: vertical;
+}
+@media (max-width: 1180px) {
+  .sales-summary,
+  .client-overview,
+  .remito-summary-list,
+  .client-info-grid,
+  .client-profile .detail-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .sales-filters,
+  .sale-main {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .sale-card {
+    grid-template-columns: 1fr;
+  }
+  .sale-actions {
+    justify-content: flex-start;
+  }
+}
+@media (max-width: 900px) {
+  .sales-summary,
+  .client-overview,
+  .sales-filters,
+  .sales-list-toolbar,
+  .client-list-toolbar,
+  .sale-main,
+  .client-card,
+  .client-remito-card,
+  .remito-focus-card,
+  .remito-summary-list,
+  .client-info-grid,
+  .client-profile .detail-grid,
+  .client-remito-detail,
+  .client-danger-zone {
+    grid-template-columns: 1fr;
+  }
+  .sales-list-toolbar,
+  .client-list-toolbar,
+  .client-danger-zone {
+    align-items: stretch;
+  }
+  .compact-pager,
+  .sale-actions,
+  .client-remito-actions,
+  .remito-focus-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+  .sale-money {
+    text-align: left;
+  }
+  .sale-actions button,
+  .client-remito-actions button,
+  .search button,
+  .sales-filters button {
+    width: 100%;
+  }
+  .search {
+    grid-template-columns: 18px minmax(0, 1fr);
+  }
+  .search button {
+    grid-column: 1 / -1;
+  }
+  .step-block {
+    grid-template-columns: 1fr;
+  }
+  .step-badge {
+    width: 30px;
+    height: 30px;
+  }
+  .remito-detail-modal,
+  .client-detail-modal,
+  .remito-edit-modal,
+  .client-edit-modal {
+    width: 100%;
+    max-height: 90vh;
+    border-radius: 18px 18px 0 0;
+  }
+}
