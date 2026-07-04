@@ -102,6 +102,159 @@ clientsRouter.get("/", async (req, res) => {
   res.json({ items, total, page, pageSize });
 });
 
+function money(value: number | string | Prisma.Decimal | unknown) {
+  const n = Number(value);
+  return new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS" }).format(Number.isFinite(n) ? n : 0);
+}
+
+function normalizePhoneForWhatsApp(telefono?: string | null, defaultCountryCode = "54"): string | null {
+  if (!telefono) return null;
+  const trimmed = telefono.trim();
+  if (!trimmed) return null;
+  const hasPlus = trimmed.startsWith("+");
+  const digits = trimmed.replace(/\D/g, "");
+  if (!digits) return null;
+  if (hasPlus) return digits;
+  const countryCode = defaultCountryCode.replace(/\D/g, "");
+  if (!countryCode) return digits;
+  if (digits.startsWith(countryCode)) return digits;
+  return `${countryCode}${digits}`;
+}
+
+function buildCobroMessage(row: { cliente_nombre: string; saldo: number }): string {
+  const saldoFmt = money(row.saldo);
+  return [
+    `¡Hola ${row.cliente_nombre}! 👋🏻`,
+    `Le recuerdo el saldo debido de ${saldoFmt} ‼️`,
+    `Para transferir, el Alias: perezmartin.pagos a nombre de Eduardo Gregorio Perez.`,
+    `Aviseme si quiere que pase a cobrar en efectivo y si hace falta que lleve algún pedido.`,
+    `Muchas gracias 😃`,
+    `Distribuidora Perez Martin 🧢`
+  ].join("\n");
+}
+
+clientsRouter.get("/cobros-pendientes", async (req, res) => {
+  try {
+    const dias = Number(req.query.dias ?? 5);
+    const dateThreshold = new Date();
+    dateThreshold.setHours(23, 59, 59, 999);
+    dateThreshold.setDate(dateThreshold.getDate() - dias);
+
+    const remitos = await prisma.remito.findMany({
+      where: {
+        estado: "ACTIVO",
+        pagoEstado: { in: ["PENDIENTE", "PARCIAL"] },
+        fecha: { lte: dateThreshold },
+        cliente: { activo: true }
+      },
+      include: {
+        cliente: true
+      },
+      orderBy: [
+        { fecha: "asc" }
+      ]
+    });
+
+    const auditLogs = await prisma.auditLog.findMany({
+      where: {
+        modulo: "Clientes",
+        accion: "ENVIAR_RECORDATORIO",
+        entidad: "Remito",
+        entidadId: { in: remitos.map((r) => r.id) }
+      },
+      orderBy: { createdAt: "desc" }
+    });
+
+    const lastNotifMap = new Map<string, Date>();
+    for (const log of auditLogs) {
+      if (log.entidadId && !lastNotifMap.has(log.entidadId)) {
+        lastNotifMap.set(log.entidadId, log.createdAt);
+      }
+    }
+
+    const cobros = remitos.map((remito) => {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const fechaRemito = new Date(remito.fecha);
+      fechaRemito.setHours(0, 0, 0, 0);
+      const diffTime = today.getTime() - fechaRemito.getTime();
+      const dias_vencida = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+      const saldo = Number(remito.total) - Number(remito.montoPagado);
+      const telefonoWhatsapp = normalizePhoneForWhatsApp(remito.cliente.telefono);
+
+      const mensaje = buildCobroMessage({
+        cliente_nombre: remito.cliente.nombre,
+        saldo
+      });
+
+      return {
+        remito_id: remito.id,
+        numero: remito.numero,
+        cliente_id: remito.clienteId,
+        cliente_nombre: remito.cliente.nombre,
+        telefono: remito.cliente.telefono || "",
+        telefono_whatsapp: telefonoWhatsapp || "",
+        fecha: remito.fecha,
+        total: Number(remito.total),
+        pagado: Number(remito.montoPagado),
+        saldo,
+        estado: remito.pagoEstado,
+        dias_vencida,
+        mensaje,
+        whatsapp_url: telefonoWhatsapp ? `https://wa.me/${telefonoWhatsapp}?text=${encodeURIComponent(mensaje)}` : "",
+        ultima_notificacion_at: lastNotifMap.get(remito.id) || null
+      };
+    });
+
+    const sinTelefono = cobros.filter((c) => !c.telefono_whatsapp).length;
+
+    res.json({
+      dias_vencido: dias,
+      total: cobros.length,
+      sin_telefono: sinTelefono,
+      cobros
+    });
+  } catch (error) {
+    console.error("Error en GET /clientes/cobros-pendientes:", error);
+    res.status(500).json({ message: "Error del servidor" });
+  }
+});
+
+clientsRouter.post("/cobros-pendientes/:remitoId/registrar", requireRoles(Rol.ADMINISTRADOR, Rol.EMPLEADO), async (req, res) => {
+  try {
+    const remitoId = String(req.params.remitoId);
+    const remito = await prisma.remito.findUnique({
+      where: { id: remitoId },
+      include: { cliente: true }
+    });
+    if (!remito) {
+      fail(404, "REMITO_NO_ENCONTRADO", "Remito no encontrado");
+    }
+
+    const saldo = Number(remito.total) - Number(remito.montoPagado);
+    await audit({
+      usuarioId: req.user!.id,
+      modulo: "Clientes",
+      accion: "ENVIAR_RECORDATORIO",
+      entidad: "Remito",
+      entidadId: remito.id,
+      descripcion: `Envió recordatorio de cobro por WhatsApp a ${remito.cliente.nombre} por boleta #${remito.numero} (saldo: ${money(saldo)})`,
+      cambios: {
+        remitoId: remito.id,
+        numero: remito.numero,
+        cliente: remito.cliente.nombre,
+        telefono: remito.cliente.telefono,
+        saldo
+      }
+    });
+
+    res.status(201).json({ ok: true });
+  } catch (error) {
+    console.error("Error en POST /clientes/cobros-pendientes/:remitoId/registrar:", error);
+    res.status(500).json({ message: "Error del servidor" });
+  }
+});
+
 clientsRouter.get("/:id", async (req, res) => {
   const id = String(req.params.id);
   const cliente = await prisma.cliente.findUnique({

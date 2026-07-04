@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { Search, Trash2, X } from "lucide-react";
+import React, { useEffect, useMemo, useState } from "react";
+import { Copy, MessageCircle, Phone, Search, Send, Trash2, X } from "lucide-react";
 import type { useApi } from "../api";
 import type { Client, LineItem, Product, Supplier, User, Vendor, Dashboard } from "../types";
 import { confirmAction, dateInput, expenseLabel, formatDate, formatMovementRow, formatPurchaseRow, formatRemitoItemRow, formatRemitoRow, itemPrice, money, movementLabel, openPdfViewer, payload, qs, referenceLabel, remitoPending } from "../utils";
@@ -19,6 +19,79 @@ export function ClientsView({ api, canWrite, canEditBalance }: { api: ReturnType
   const [importPdf, setImportPdf] = useState<File | null>(null);
   const [importFileKey, setImportFileKey] = useState(0);
   const [updateImportedBalance, setUpdateImportedBalance] = useState(true);
+
+  const [activeTab, setActiveTab] = useState<"list" | "cobros">("list");
+  const [cobros, setCobros] = useState<any[]>([]);
+  const [cobrosLoading, setCobrosLoading] = useState(false);
+  const [dias, setDias] = useState("5");
+  const [cobrosSearch, setCobrosSearch] = useState("");
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [registrando, setRegistrando] = useState<string | null>(null);
+
+  const loadCobros = () => {
+    setCobrosLoading(true);
+    api(`/clientes/cobros-pendientes?dias=${dias}`)
+      .then((data) => {
+        setCobros(data.cobros || []);
+      })
+      .catch((err) => {
+        window.alert(err.message ?? "Error al cargar cobros pendientes");
+      })
+      .finally(() => {
+        setCobrosLoading(false);
+      });
+  };
+
+  useEffect(() => {
+    if (activeTab === "cobros") {
+      loadCobros();
+    }
+  }, [activeTab]);
+
+  const filteredCobros = useMemo(() => {
+    const term = cobrosSearch.trim().toLowerCase();
+    if (!term) return cobros;
+    return cobros.filter((c) =>
+      c.cliente_nombre.toLowerCase().includes(term) ||
+      c.telefono.includes(term) ||
+      String(c.numero).includes(term)
+    );
+  }, [cobros, cobrosSearch]);
+
+  const totalPendiente = useMemo(() => {
+    return filteredCobros.reduce((sum, c) => sum + Number(c.saldo), 0);
+  }, [filteredCobros]);
+
+  const copyMessage = async (id: string, mensaje: string) => {
+    try {
+      await navigator.clipboard.writeText(mensaje);
+      setCopiedId(id);
+      setTimeout(() => setCopiedId(null), 2000);
+    } catch {
+      window.alert("No se pudo copiar el mensaje");
+    }
+  };
+
+  const registrarYEnviar = async (cobro: any) => {
+    const win = window.open(cobro.whatsapp_url, "_blank", "noopener,noreferrer");
+    if (!win) {
+      window.alert("Permití ventanas emergentes para abrir WhatsApp");
+      return;
+    }
+
+    try {
+      setRegistrando(cobro.remito_id);
+      await api(`/clientes/cobros-pendientes/${cobro.remito_id}/registrar`, {
+        method: "POST"
+      });
+      loadCobros();
+    } catch (error: any) {
+      window.alert(error.message ?? "WhatsApp abrió, pero no se pudo registrar el recordatorio");
+    } finally {
+      setRegistrando(null);
+    }
+  };
+
   const load = (term = q, nextPage = page): Promise<void> => api(`/clientes?${qs({ q: term, page: nextPage, pageSize: CLIENTS_PAGE_SIZE })}`).then((d) => {
     const resultTotal = d.total ?? d.items.length;
     if (!d.items.length && resultTotal > 0 && nextPage > 1) return load(term, nextPage - 1);
@@ -114,38 +187,154 @@ export function ClientsView({ api, canWrite, canEditBalance }: { api: ReturnType
     load(q, safePage);
   };
   return <div className="client-page">
-    <section className="client-overview">
-      <Metric label="Clientes encontrados" value={String(totalClients)} />
-      <Metric label="Activos en página" value={String(activeCount)} />
-      <Metric label="Saldo en página" value={money(totalSaldo)} />
-    </section>
-    <section className="panel wide client-list-panel">
-      <div className="detail-head"><div><h2>Clientes</h2><span>Seleccioná un cliente para ver saldo, datos y boletas pendientes.</span></div></div>
-      <SearchBox q={q} setQ={setQ} onSearch={(e) => { e?.preventDefault(); setPage(1); load(q, 1); }} onClear={() => { setQ(""); setPage(1); load("", 1); }} placeholder="Buscar por nombre, empresa o email" />
-      <div className="client-list-toolbar">
-        <span>{firstVisible}-{lastVisible} de {totalClients} clientes</span>
-        <div className="pager compact-pager">
-          <button type="button" className="secondary" onClick={() => goToPage(page - 1)} disabled={page === 1}>Anterior</button>
-          <span>Página {page} de {totalPages}</span>
-          <button type="button" className="secondary" onClick={() => goToPage(page + 1)} disabled={page === totalPages}>Siguiente</button>
+    <div className="tabs compact-tabs" style={{ gridColumn: "1 / -1", margin: "0 0 1rem 0" }}>
+      <button type="button" className={activeTab === "list" ? "active" : ""} onClick={() => setActiveTab("list")}>Lista de Clientes</button>
+      <button type="button" className={activeTab === "cobros" ? "active" : ""} onClick={() => setActiveTab("cobros")}>Cobros Pendientes</button>
+    </div>
+
+    {activeTab === "list" && <>
+      <section className="client-overview">
+        <Metric label="Clientes encontrados" value={String(totalClients)} />
+        <Metric label="Activos en página" value={String(activeCount)} />
+        <Metric label="Saldo en página" value={money(totalSaldo)} />
+      </section>
+      <section className="panel wide client-list-panel">
+        <div className="detail-head"><div><h2>Clientes</h2><span>Seleccioná un cliente para ver saldo, datos y boletas pendientes.</span></div></div>
+        <SearchBox q={q} setQ={setQ} onSearch={(e) => { e?.preventDefault(); setPage(1); load(q, 1); }} onClear={() => { setQ(""); setPage(1); load("", 1); }} placeholder="Buscar por nombre, empresa o email" />
+        <div className="client-list-toolbar">
+          <span>{firstVisible}-{lastVisible} de {totalClients} clientes</span>
+          <div className="pager compact-pager">
+            <button type="button" className="secondary" onClick={() => goToPage(page - 1)} disabled={page === 1}>Anterior</button>
+            <span>Página {page} de {totalPages}</span>
+            <button type="button" className="secondary" onClick={() => goToPage(page + 1)} disabled={page === totalPages}>Siguiente</button>
+          </div>
         </div>
-      </div>
-      <div className="client-list">{clientRows.map((client) => <button type="button" className={`client-card ${selectedClient?.id === client.id ? "active" : ""}`} key={client.id} onClick={() => openClient(client)}><div><strong>{client.nombre}</strong><span>{client.empresa || "Consumidor final"}</span></div><div><span>Saldo</span><strong>{client.saldoFmt}</strong></div><small>{client.estadoFmt}</small></button>)}{!clientRows.length && <p className="muted">No hay clientes con esa búsqueda.</p>}</div>
-    </section>
-    {selectedClient && <div className="modal-backdrop client-modal-backdrop" role="dialog" aria-modal="true" aria-label={`Cliente ${selectedClient.nombre}`} onClick={() => setSelectedClient(null)}>
-      <ClientDetail client={selectedClient} canWrite={canWrite} canEditBalance={canEditBalance} onUpdate={updateClient} onDelete={deleteClient} onClose={() => setSelectedClient(null)} onPdf={openClientRemitoPdf} />
-    </div>}
-    {canWrite && <section className="panel import-history-panel">
-      <div className="detail-head"><div><h2>Importar historial anterior</h2><span>Subí el PDF anterior del cliente o pegá el texto copiado. Se guarda como historial y no modifica stock.</span></div></div>
-      <form className="form import-history-form" onSubmit={importHistory}>
-        <label className="field-label"><span>PDF del cliente</span><input key={importFileKey} type="file" accept="application/pdf,.pdf" onChange={(event) => setImportPdf(event.target.files?.[0] ?? null)} /></label>
-        <textarea value={importText} onChange={(event) => setImportText(event.target.value)} placeholder="Opcional: pegá acá el informe del cliente copiado desde el PDF..." rows={7} required={!importPdf} />
-        <label className="checkbox-line"><input type="checkbox" checked={updateImportedBalance} onChange={(event) => setUpdateImportedBalance(event.target.checked)} />Actualizar saldo pendiente con el saldo debido del informe</label>
-        {error && <p className="error">{error}</p>}
-        <button>{importPdf ? `Importar ${importPdf.name}` : "Importar historial"}</button>
-      </form>
-    </section>}
-    {canWrite && <section className="panel"><h2>Nuevo cliente</h2><form className="form client-form" onSubmit={create}><ClientFields />{error && <p className="error">{error}</p>}<button>Crear cliente</button></form></section>}
+        <div className="client-list">{clientRows.map((client) => <button type="button" className={`client-card ${selectedClient?.id === client.id ? "active" : ""}`} key={client.id} onClick={() => openClient(client)}><div><strong>{client.nombre}</strong><span>{client.empresa || "Consumidor final"}</span></div><div><span>Saldo</span><strong>{client.saldoFmt}</strong></div><small>{client.estadoFmt}</small></button>)}{!clientRows.length && <p className="muted">No hay clientes con esa búsqueda.</p>}</div>
+      </section>
+      {selectedClient && <div className="modal-backdrop client-modal-backdrop" role="dialog" aria-modal="true" aria-label={`Cliente ${selectedClient.nombre}`} onClick={() => setSelectedClient(null)}>
+        <ClientDetail client={selectedClient} canWrite={canWrite} canEditBalance={canEditBalance} onUpdate={updateClient} onDelete={deleteClient} onClose={() => setSelectedClient(null)} onPdf={openClientRemitoPdf} />
+      </div>}
+      {canWrite && <section className="panel import-history-panel">
+        <div className="detail-head"><div><h2>Importar historial anterior</h2><span>Subí el PDF anterior del cliente o pegá el texto copiado. Se guarda como historial y no modifica stock.</span></div></div>
+        <form className="form import-history-form" onSubmit={importHistory}>
+          <label className="field-label"><span>PDF del cliente</span><input key={importFileKey} type="file" accept="application/pdf,.pdf" onChange={(event) => setImportPdf(event.target.files?.[0] ?? null)} /></label>
+          <textarea value={importText} onChange={(event) => setImportText(event.target.value)} placeholder="Opcional: pegá acá el informe del cliente copiado desde el PDF..." rows={7} required={!importPdf} />
+          <label className="checkbox-line"><input type="checkbox" checked={updateImportedBalance} onChange={(event) => setUpdateImportedBalance(event.target.checked)} />Actualizar saldo pendiente con el saldo debido del informe</label>
+          {error && <p className="error">{error}</p>}
+          <button>{importPdf ? `Importar ${importPdf.name}` : "Importar historial"}</button>
+        </form>
+      </section>}
+      {canWrite && <section className="panel"><h2>Nuevo cliente</h2><form className="form client-form" onSubmit={create}><ClientFields />{error && <p className="error">{error}</p>}<button>Crear cliente</button></form></section>}
+    </>}
+
+    {activeTab === "cobros" && <>
+      <section className="client-overview">
+        <Metric label="Facturas vencidas" value={String(filteredCobros.length)} />
+        <Metric label="Total por cobrar" value={money(totalPendiente)} />
+        <Metric label="Regla activa" value={`+${dias} días`} />
+      </section>
+
+      <section className="panel wide client-list-panel">
+        <div className="detail-head">
+          <div>
+            <h2>Cobros Pendientes</h2>
+            <span>Boletas con saldo pendiente ordenadas por antigüedad.</span>
+          </div>
+        </div>
+
+        <div className="cobros-filters">
+          <SearchBox
+            q={cobrosSearch}
+            setQ={setCobrosSearch}
+            onSearch={(e) => { e?.preventDefault(); }}
+            onClear={() => setCobrosSearch("")}
+            placeholder="Buscar por cliente, teléfono o número de boleta..."
+          />
+          <div className="dias-input-container">
+            <label htmlFor="dias-filtro">Días vencimiento:</label>
+            <input
+              id="dias-filtro"
+              type="number"
+              min="1"
+              value={dias}
+              onChange={(e) => setDias(e.target.value)}
+              className="dias-input"
+            />
+          </div>
+          <button type="button" onClick={loadCobros} disabled={cobrosLoading}>
+            Actualizar
+          </button>
+        </div>
+
+        {cobrosLoading ? (
+          <p className="muted" style={{ textAlign: "center", padding: "2rem" }}>Cargando cobros pendientes...</p>
+        ) : filteredCobros.length === 0 ? (
+          <p className="muted" style={{ textAlign: "center", padding: "2rem" }}>No hay cobros pendientes que coincidan con los filtros.</p>
+        ) : (
+          <div className="cobro-list">
+            {filteredCobros.map((cobro) => (
+              <div className="cobro-card" key={cobro.remito_id}>
+                <div className="cobro-card-main">
+                  <div className="cobro-card-header">
+                    <h3>{cobro.cliente_nombre}</h3>
+                    <span className="badge-vencido">{cobro.dias_vencida} días vencida</span>
+                  </div>
+                  <div className="cobro-meta">
+                    {cobro.telefono && (
+                      <span>
+                        <Phone size={14} /> {cobro.telefono}
+                      </span>
+                    )}
+                    <span>
+                      Boleta #{cobro.numero}
+                    </span>
+                    <span>
+                      Fecha: {new Date(cobro.fecha).toLocaleDateString("es-AR")}
+                    </span>
+                  </div>
+                  <div className="cobro-mensaje-preview">
+                    {cobro.mensaje}
+                  </div>
+                  {cobro.ultima_notificacion_at && (
+                    <span className="cobro-notif-time">
+                      Último recordatorio registrado: {new Date(cobro.ultima_notificacion_at).toLocaleString("es-AR")}
+                    </span>
+                  )}
+                </div>
+                <div className="cobro-card-aside">
+                  <div className="cobro-saldo-box">
+                    <span>Saldo</span>
+                    <strong>{money(cobro.saldo)}</strong>
+                  </div>
+                  <div className="cobro-actions">
+                    <button
+                      type="button"
+                      className="secondary"
+                      onClick={() => copyMessage(cobro.remito_id, cobro.mensaje)}
+                    >
+                      {copiedId === cobro.remito_id ? "¡Copiado!" : "Copiar"}
+                    </button>
+                    {cobro.telefono_whatsapp ? (
+                      <button
+                        type="button"
+                        onClick={() => registrarYEnviar(cobro)}
+                        disabled={registrando === cobro.remito_id}
+                      >
+                        {registrando === cobro.remito_id ? "Registrando..." : "WhatsApp"}
+                      </button>
+                    ) : (
+                      <button type="button" disabled title="Sin teléfono válido para WhatsApp">
+                        WhatsApp
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+    </>}
   </div>;
 }
 

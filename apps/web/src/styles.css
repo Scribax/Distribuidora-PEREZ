@@ -6917,3 +6917,127 @@ body:has(.modal-backdrop) {
     padding: 10px;
   }
 }
+
+/* Seccion de Cobros */
+.cobro-list {
+  display: grid;
+  gap: 12px;
+}
+.cobro-card {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 16px;
+  padding: 16px;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  align-items: start;
+}
+.cobro-card-main {
+  display: grid;
+  gap: 8px;
+}
+.cobro-card-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.cobro-card-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+}
+.badge-vencido {
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 9999px;
+  background: #fee2e2;
+  color: #ef4444;
+}
+[data-theme="dark"] .badge-vencido {
+  background: rgba(239, 68, 68, 0.2);
+  color: #fca5a5;
+}
+.cobro-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--muted);
+  align-items: center;
+}
+.cobro-meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.cobro-mensaje-preview {
+  font-size: 13px;
+  color: var(--muted);
+  background: var(--surface-soft);
+  padding: 8px 12px;
+  border-radius: 6px;
+  border-left: 3px solid var(--line);
+  margin-top: 4px;
+  white-space: pre-line;
+}
+.cobro-card-aside {
+  display: grid;
+  gap: 8px;
+  text-align: right;
+  justify-items: end;
+}
+.cobro-saldo-box span {
+  font-size: 12px;
+  color: var(--muted);
+}
+.cobro-saldo-box strong {
+  display: block;
+  font-size: 20px;
+  color: #ef4444;
+}
+.cobro-actions {
+  display: flex;
+  gap: 8px;
+}
+.cobro-actions button {
+  padding: 6px 12px;
+  font-size: 13px;
+}
+.cobro-notif-time {
+  font-size: 11px;
+  color: var(--brand-yellow);
+  margin-top: 2px;
+}
+.cobros-filters {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.cobros-filters .search-box {
+  flex: 1;
+  min-width: 200px;
+}
+.dias-input-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.dias-input-container label {
+  font-size: 13px;
+  color: var(--muted);
+}
+.dias-input {
+  width: 70px;
+  padding: 8px;
+  border: 1px solid var(--line-soft);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  text-align: center;
+}
