@@ -29,8 +29,8 @@ export function EntityPicker<T extends { id: string }>({ items, value, onChange,
       <span>{selected ? getLabel(selected) : placeholder}</span>
       {selected && getMeta && <small>{getMeta(selected)}</small>}
     </button>
-    {open && <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label={title}>
-      <div className="selector-modal">
+    {open && <div className="modal-backdrop selector-backdrop" role="dialog" aria-modal="true" aria-label={title} onMouseDown={() => setOpen(false)}>
+      <div className="selector-modal" onMouseDown={(event) => event.stopPropagation()}>
         <div className="selector-head">
           <div><h3>{title}</h3><span>{visibleItems.length} resultado{visibleItems.length === 1 ? "" : "s"}</span></div>
           <button type="button" className="icon-button" onClick={() => setOpen(false)} title="Cerrar"><X size={18} /></button>
@@ -42,7 +42,7 @@ export function EntityPicker<T extends { id: string }>({ items, value, onChange,
         </div>
         <div className="selector-list">
           {!required && <button type="button" className="selector-row muted-choice" onClick={() => choose("")}><strong>{placeholder}</strong><span>Dejar sin seleccionar</span></button>}
-          {visibleItems.map((item) => <button type="button" className="selector-row" key={item.id} onClick={() => choose(item.id)}><strong>{getLabel(item)}</strong>{getMeta && <span>{getMeta(item)}</span>}</button>)}
+          {visibleItems.map((item) => <button type="button" className={`selector-row${value === item.id ? " selected" : ""}`} key={item.id} onClick={() => choose(item.id)}><strong>{getLabel(item)}</strong>{getMeta && <span>{getMeta(item)}</span>}</button>)}
           {!visibleItems.length && <p className="muted empty-selector">No hay resultados.</p>}
         </div>
       </div>
