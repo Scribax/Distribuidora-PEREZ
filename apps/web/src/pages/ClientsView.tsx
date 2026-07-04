@@ -64,13 +64,17 @@ export function ClientsView({ api, canWrite, canEditBalance }: { api: ReturnType
 
   const buildMensaje = (saldo: number) => {
     const saldoFmt = money(saldo);
+    const wave  = String.fromCodePoint(0x1F44B, 0x1F3FB); // 👋🏻
+    const bang  = String.fromCodePoint(0x203C, 0xFE0F);   // ‼️
+    const smile = String.fromCodePoint(0x1F603);           // 😃
+    const cap   = String.fromCodePoint(0x1F9E2);           // 🧢
     return [
-      "¡Hola!",
-      `Le recuerdo el saldo debido de ${saldoFmt}.`,
+      "¡Hola! " + wave,
+      `Le recuerdo el saldo debido de ${saldoFmt} ${bang}`,
       "Para transferir, el Alias: perezmartin.pagos a nombre de Eduardo Gregorio Perez.",
       "Aviseme si quiere que pase a cobrar en efectivo y si hace falta que lleve alg\u00FAn pedido.",
-      "Muchas gracias.",
-      "Distribuidora Perez Martin"
+      "Muchas gracias " + smile,
+      "Distribuidora Perez Martin " + cap
     ].join("\n\n");
   };
 
