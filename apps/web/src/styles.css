@@ -6216,3 +6216,41 @@ textarea {
 .metric-v2 strong {
   white-space: normal;
 }
+
+.dashboard-metrics-v2 .metric-v2 {
+  display: grid;
+  grid-template-columns: 1fr;
+  align-items: start;
+  min-height: 94px;
+  padding: 16px 18px;
+  border-top: 4px solid var(--line);
+}
+
+.dashboard-metrics-v2 .metric-icon {
+  display: none;
+}
+
+.dashboard-metrics-v2 .tone-red {
+  border-top-color: var(--brand-red);
+}
+
+.dashboard-metrics-v2 .tone-blue {
+  border-top-color: var(--brand-blue);
+}
+
+.dashboard-metrics-v2 .tone-amber {
+  border-top-color: var(--brand-yellow);
+}
+
+.dashboard-metrics-v2 .tone-green {
+  border-top-color: var(--success);
+}
+
+.dashboard-metrics-v2 .tone-slate {
+  border-top-color: #64748b;
+}
+
+.dashboard-metrics-v2 .metric-v2 > div {
+  grid-column: auto;
+  grid-row: auto;
+}
