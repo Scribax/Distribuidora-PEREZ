@@ -6254,3 +6254,165 @@ textarea {
   grid-column: auto;
   grid-row: auto;
 }
+
+/* UI v2 - modal QA polish */
+.modal-backdrop {
+  z-index: 80;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 28px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+html:has(.modal-backdrop),
+body:has(.modal-backdrop) {
+  overflow: hidden;
+}
+
+.modal-backdrop::-webkit-scrollbar {
+  width: 10px;
+}
+
+.modal-backdrop::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--muted) 35%, transparent);
+  background-clip: content-box;
+}
+
+.selector-modal,
+.form-modal,
+.remito-detail-modal,
+.client-detail-modal,
+.remito-edit-modal,
+.client-edit-modal,
+.product-detail-modal,
+.purchase-detail-modal,
+.vendor-detail-modal {
+  width: min(var(--modal-width, 920px), calc(100vw - 56px));
+  max-width: 100%;
+  min-width: 0;
+  max-height: none;
+  overflow: visible;
+  border-radius: 18px;
+  box-shadow: 0 26px 80px var(--shadow-strong);
+}
+
+.selector-modal {
+  --modal-width: 720px;
+  max-height: min(760px, calc(100dvh - 56px));
+  overflow: hidden;
+}
+
+.form-modal,
+.client-edit-modal {
+  --modal-width: 560px;
+}
+
+.supplier-modal,
+.remito-edit-modal {
+  --modal-width: 920px;
+}
+
+.client-detail-modal {
+  --modal-width: 960px;
+}
+
+.product-detail-modal,
+.vendor-detail-modal,
+.remito-detail-modal {
+  --modal-width: 1080px;
+}
+
+.purchase-detail-modal {
+  --modal-width: 880px;
+}
+
+.client-detail-modal,
+.remito-detail-modal,
+.product-detail-modal,
+.purchase-detail-modal,
+.vendor-detail-modal {
+  padding: 18px;
+}
+
+.client-hero,
+.detail-head {
+  min-width: 0;
+}
+
+.client-hero > div,
+.detail-head > div {
+  min-width: 0;
+}
+
+.client-hero h2,
+.detail-head h2 {
+  overflow-wrap: anywhere;
+}
+
+.historical-card {
+  overflow: hidden;
+  border-left: 4px solid var(--brand-red);
+  background: var(--surface);
+}
+
+.historical-summary {
+  grid-template-columns: minmax(0, 1fr) minmax(260px, auto) auto;
+  background: var(--surface);
+  color: var(--text);
+}
+
+.historical-summary:hover {
+  background: var(--surface-soft);
+  box-shadow: none;
+}
+
+.historical-summary-values {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(82px, auto));
+  gap: 10px;
+}
+
+.historical-summary-values span {
+  min-width: 0;
+  color: var(--muted);
+}
+
+.historical-summary-values strong {
+  color: var(--text);
+  white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+  .modal-backdrop {
+    align-items: flex-end;
+    padding: 14px 10px;
+  }
+
+  .selector-modal,
+  .form-modal,
+  .remito-detail-modal,
+  .client-detail-modal,
+  .remito-edit-modal,
+  .client-edit-modal,
+  .product-detail-modal,
+  .purchase-detail-modal,
+  .vendor-detail-modal {
+    width: 100%;
+    max-width: 100%;
+    border-radius: 18px 18px 0 0;
+  }
+
+  .historical-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .historical-summary-values {
+    grid-template-columns: 1fr;
+    text-align: left;
+  }
+}
