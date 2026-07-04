@@ -73,7 +73,10 @@ export function ClientsView({ api, canWrite, canEditBalance }: { api: ReturnType
   };
 
   const registrarYEnviar = async (cobro: any) => {
-    const win = window.open(cobro.whatsapp_url, "_blank", "noopener,noreferrer");
+    // Construimos la URL en el browser para que encodeURIComponent maneje
+    // los emojis correctamente sin depender del encoding del servidor
+    const waUrl = `https://wa.me/${cobro.telefono_whatsapp}?text=${encodeURIComponent(cobro.mensaje)}`;
+    const win = window.open(waUrl, "_blank", "noopener,noreferrer");
     if (!win) {
       window.alert("Permití ventanas emergentes para abrir WhatsApp");
       return;
