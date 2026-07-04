@@ -6064,3 +6064,82 @@ tr:hover td {
     padding: 26px 20px;
   }
 }
+
+/* UI v2 - responsive QA guardrails */
+.table-wrap {
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+.panel,
+.workspace,
+.workspace-header,
+.form,
+.filters,
+.filters-wide,
+.search,
+.products-toolbar,
+.stock-filter-bar,
+.sales-filters {
+  min-width: 0;
+}
+
+button,
+input,
+select,
+textarea {
+  max-width: 100%;
+}
+
+@media (max-width: 900px) {
+  html,
+  body,
+  #root,
+  .app {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  aside {
+    right: auto;
+    max-width: min(88vw, 288px);
+  }
+
+  .workspace {
+    width: 100%;
+    padding-bottom: calc(104px + env(safe-area-inset-bottom));
+  }
+
+  .workspace-header h1,
+  .workspace-header p,
+  .user-pill {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+
+  .mobile-bottom-nav {
+    left: 12px;
+    right: 12px;
+    width: auto;
+    max-width: calc(100vw - 24px);
+    padding-bottom: max(8px, env(safe-area-inset-bottom));
+  }
+
+  .mobile-bottom-nav button {
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .mobile-bottom-nav button span {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .table-wrap {
+    max-width: 100%;
+  }
+}
