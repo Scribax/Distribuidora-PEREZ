@@ -6495,3 +6495,264 @@ body:has(.modal-backdrop) {
     gap: 2px;
   }
 }
+
+/* UI v2 - full mobile hardening pass */
+@media (max-width: 900px) {
+  .workspace,
+  .panel,
+  .wide,
+  .detail-panel,
+  .client-page,
+  .products-page,
+  .stock-page,
+  .purchase-page,
+  .expenses-page,
+  .balance-page,
+  .reports-page,
+  .dashboard-page,
+  .users-page {
+    min-width: 0;
+  }
+
+  .workspace-header,
+  .detail-head,
+  .section-title,
+  .stock-movement-head,
+  .audit-toolbar,
+  .client-list-toolbar,
+  .sales-list-toolbar,
+  .products-toolbar,
+  .stock-toolbar,
+  .filters,
+  .filters-wide,
+  .balance-filters,
+  .audit-filters,
+  .sales-filters,
+  .stock-filter-bar,
+  .commission-sync,
+  .commission-sync-form,
+  .commission-sync-actions,
+  .account-form,
+  .purchase-add-line,
+  .supplier-picker,
+  .expense-form,
+  .product-form,
+  .client-edit-form,
+  .client-form,
+  .form-grid,
+  .payment-grid,
+  .add-line,
+  .compact-form,
+  .modal-actions,
+  .table-actions {
+    grid-template-columns: 1fr !important;
+    align-items: stretch;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .detail-head,
+  .section-title,
+  .workspace-header,
+  .client-list-toolbar,
+  .sales-list-toolbar,
+  .audit-toolbar,
+  .stock-movement-head {
+    display: grid;
+    gap: 10px;
+  }
+
+  .detail-head > *,
+  .section-title > *,
+  .workspace-header > *,
+  .client-list-toolbar > *,
+  .sales-list-toolbar > *,
+  .audit-toolbar > * {
+    min-width: 0;
+  }
+
+  .detail-head button,
+  .section-title button,
+  .filters button,
+  .filters-wide button,
+  .products-toolbar button,
+  .stock-filter-bar button,
+  .sales-filters button,
+  .balance-filters button,
+  .audit-filters button,
+  .commission-sync-actions button,
+  .modal-actions button,
+  .table-actions button,
+  .pager button,
+  .compact-pager button {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .compact-pager,
+  .pager,
+  .sale-actions,
+  .client-remito-actions,
+  .remito-focus-actions,
+  .vendor-sale-side,
+  .stock-product-metrics,
+  .sale-badges,
+  .audit-tags {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: 8px;
+    width: 100%;
+    min-width: 0;
+    text-align: left;
+  }
+
+  .client-card,
+  .sale-card,
+  .product-card,
+  .stock-product-card summary,
+  .expense-row,
+  .account-movement-row,
+  .vendor-sale-row,
+  .supplier-card,
+  .report-row,
+  .audit-main,
+  .line-item,
+  .movement,
+  .client-remito-card,
+  .historical-summary,
+  .historical-invoice,
+  .historical-total,
+  .remito-focus-card,
+  .client-danger-zone {
+    grid-template-columns: 1fr !important;
+    gap: 8px;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .line-item,
+  .expense-row,
+  .account-movement-row,
+  .vendor-sale-row,
+  .client-remito-card,
+  .historical-invoice,
+  .movement {
+    padding: 10px;
+    border-radius: 12px;
+  }
+
+  .historical-invoice.head {
+    display: none;
+  }
+
+  .historical-total {
+    display: grid;
+    justify-content: stretch;
+    text-align: left;
+  }
+
+  .metric,
+  .info-item,
+  .field-card,
+  .cashbox-card,
+  .vendor-stats-card,
+  .account-card {
+    min-width: 0;
+  }
+
+  .metric strong,
+  .info-item strong,
+  .cashbox-card strong,
+  .vendor-stats-card strong,
+  .account-card strong,
+  .sale-money,
+  .expense-row > strong,
+  .vendor-sale-side,
+  .movement-numbers {
+    text-align: left;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .status-chip,
+  .mini-chip {
+    max-width: 100%;
+    white-space: normal;
+  }
+
+  input,
+  select,
+  textarea,
+  .picker-trigger,
+  .selector-search,
+  .search,
+  .search-field,
+  .compact-search {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .modal-backdrop {
+    padding-inline: 8px;
+  }
+
+  .modal-backdrop .panel,
+  .modal-backdrop .detail-panel,
+  .modal-backdrop .product-detail-modal,
+  .modal-backdrop .client-detail-modal,
+  .modal-backdrop .remito-detail-modal,
+  .modal-backdrop .purchase-detail-modal,
+  .modal-backdrop .vendor-detail-modal,
+  .modal-backdrop .client-edit-modal,
+  .modal-backdrop .remito-edit-modal,
+  .modal-backdrop .form-modal {
+    padding: 14px;
+  }
+
+  .modal-backdrop .detail-grid,
+  .modal-backdrop .client-info-grid,
+  .modal-backdrop .remito-summary-list,
+  .modal-backdrop .product-detail-modal > .detail-grid,
+  .modal-backdrop .product-detail-modal > .product-form,
+  .modal-backdrop .vendor-detail-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  h1,
+  h2,
+  h3,
+  p,
+  span,
+  strong,
+  small,
+  button {
+    overflow-wrap: anywhere;
+  }
+}
+
+@media (max-width: 420px) {
+  .workspace {
+    padding-inline: 10px;
+  }
+
+  .panel,
+  .modal-backdrop .panel,
+  .modal-backdrop .detail-panel,
+  .modal-backdrop .product-detail-modal,
+  .modal-backdrop .client-detail-modal,
+  .modal-backdrop .remito-detail-modal,
+  .modal-backdrop .purchase-detail-modal,
+  .modal-backdrop .vendor-detail-modal,
+  .modal-backdrop .client-edit-modal,
+  .modal-backdrop .remito-edit-modal,
+  .modal-backdrop .form-modal {
+    padding: 12px;
+  }
+
+  .metric,
+  .info-item,
+  .field-card {
+    padding: 10px;
+  }
+}
