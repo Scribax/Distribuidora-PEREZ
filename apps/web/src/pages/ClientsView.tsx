@@ -62,16 +62,21 @@ export function ClientsView({ api, canWrite, canEditBalance }: { api: ReturnType
     return filteredCobros.reduce((sum, c) => sum + Number(c.saldo), 0);
   }, [filteredCobros]);
 
-  // Mensaje construido en el frontend (Vite maneja UTF-8 correctamente)
+  // Mensaje construido en el frontend con surrogate pairs (puro ASCII, no se corrompen)
+  // Decodificacion: \uD83D\uDC4B\uD83C\uDFFB = 👋🏻 | \u203C\uFE0F = ‼️ | \uD83D\uDE03 = 😃 | \uD83E\uDDE2 = 🧢
   const buildMensaje = (nombre: string, saldo: number) => {
     const saldoFmt = money(saldo);
+    const wave  = "\uD83D\uDC4B\uD83C\uDFFB"; // 👋🏻
+    const bang  = "\u203C\uFE0F";             // ‼️
+    const smile = "\uD83D\uDE03";             // 😃
+    const cap   = "\uD83E\uDDE2";             // 🧢
     return [
-      `¡Hola ${nombre}! 👋🏻`,
-      `Le recuerdo el saldo debido de ${saldoFmt} ‼️`,
-      `Para transferir, el Alias: perezmartin.pagos a nombre de Eduardo Gregorio Perez.`,
-      `Aviseme si quiere que pase a cobrar en efectivo y si hace falta que lleve algún pedido.`,
-      `Muchas gracias 😃`,
-      `Distribuidora Perez Martin 🧢`,
+      "\u00A1Hola " + nombre + "! " + wave,
+      "Le recuerdo el saldo debido de " + saldoFmt + " " + bang,
+      "Para transferir, el Alias: perezmartin.pagos a nombre de Eduardo Gregorio Perez.",
+      "Aviseme si quiere que pase a cobrar en efectivo y si hace falta que lleve alg\u00FAn pedido.",
+      "Muchas gracias " + smile,
+      "Distribuidora Perez Martin " + cap,
     ].join("\n");
   };
 
