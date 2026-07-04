@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { createRequire } from "node:module";
 import { Router } from "express";
 import { Prisma, Rol } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
@@ -12,8 +13,11 @@ import { audit, diffFields } from "../lib/audit.js";
 export const clientsRouter = Router();
 clientsRouter.use(requireAuth);
 
+const require = createRequire(import.meta.url);
+const pdfParse = require("pdf-parse") as (buffer: Buffer) => Promise<{ text: string }>;
 const deletedClientsBackupDir = path.resolve(process.cwd(), "backups/clientes-eliminados");
 const amountPattern = String.raw`\$?\s*\d{1,3}(?:\.\d{3})*,\d{2}`;
+const bareAmountPattern = String.raw`\d{1,3}(?:\.\d{3})*,\d{2}`;
 
 function backupFileName(clientName: string, clientId: string) {
   const safeName = clientName.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9_-]+/g, "-").replace(/^-|-$/g, "").slice(0, 80) || "cliente";
@@ -36,6 +40,16 @@ function parseArgDate(value: string) {
   return new Date(year, month - 1, day);
 }
 
+async function extractPdfTextFromBase64(pdfBase64: string) {
+  const clean = pdfBase64.replace(/^data:application\/pdf;base64,/i, "").trim();
+  const buffer = Buffer.from(clean, "base64");
+  if (!buffer.length || buffer.subarray(0, 4).toString("utf8") !== "%PDF") {
+    fail(422, "PDF_INVALIDO", "El archivo no parece ser un PDF válido");
+  }
+  const parsed = await pdfParse(buffer);
+  return parsed.text ?? "";
+}
+
 function parseHistoricalClientReport(text: string) {
   const source = text.replace(/\r/g, "\n");
   const compact = source.replace(/\s+/g, " ").trim();
@@ -46,9 +60,10 @@ function parseHistoricalClientReport(text: string) {
   const nombre = (titleMatch?.[1] ?? uppercaseNames.at(-1) ?? "").replace(/\s+-\s*$/, "").trim();
   if (!nombre) fail(422, "CLIENTE_NO_DETECTADO", "No pude detectar el nombre del cliente en el informe");
 
-  const rowRe = new RegExp(String.raw`^\s*(\d+)\s+(\d{2}\/\d{2}\/\d{4})\s+(${amountPattern})\s+(${amountPattern})\s+(${amountPattern})\s+(${amountPattern})(?:\s*ARS)?\s*$`);
+  const spacedRowRe = new RegExp(String.raw`^\s*(\d+)\s+(\d{2}\/\d{2}\/\d{4})\s+(${amountPattern})\s+(${amountPattern})\s+(${amountPattern})\s+(${amountPattern})(?:\s*ARS)?\s*$`);
+  const compactRowRe = new RegExp(String.raw`^\s*(\d+?)(\d{2}\/\d{2}\/\d{4})(${bareAmountPattern})(${bareAmountPattern})(${bareAmountPattern})\$?\s*(${bareAmountPattern})(?:\s*ARS)?\s*$`);
   const facturas = source.split("\n").map((line) => line.replace(/\s+/g, " ").trim()).map((line) => {
-    const match = line.match(rowRe);
+    const match = line.match(spacedRowRe) ?? line.match(compactRowRe);
     if (!match) return null;
     return {
       numero: Number(match[1]),
@@ -61,9 +76,9 @@ function parseHistoricalClientReport(text: string) {
   }).filter(Boolean) as { numero: number; fecha: Date; subtotal: number; impuesto: number; pagado: number; total: number }[];
   if (!facturas.length) fail(422, "FACTURAS_NO_DETECTADAS", "No pude detectar facturas en el informe. Probá copiar el texto completo del PDF");
 
-  const totalMatch = compact.match(new RegExp(String.raw`Total\s+(${amountPattern})\s*ARS`, "i"));
-  const paidMatch = compact.match(new RegExp(String.raw`Pagado\s+(${amountPattern})\s*ARS`, "i"));
-  const balanceMatch = compact.match(new RegExp(String.raw`Saldo debido\s+(${amountPattern})\s*ARS`, "i"));
+  const totalMatch = compact.match(new RegExp(String.raw`Total\s*(${amountPattern})\s*ARS`, "i"));
+  const paidMatch = compact.match(new RegExp(String.raw`Pagado\s*(${amountPattern})\s*ARS`, "i"));
+  const balanceMatch = compact.match(new RegExp(String.raw`Saldo debido\s*(${amountPattern})\s*ARS`, "i"));
   const total = totalMatch ? parseArgMoney(totalMatch[1]) : facturas.reduce((sum, item) => sum + item.total, 0);
   const pagado = paidMatch ? parseArgMoney(paidMatch[1]) : facturas.reduce((sum, item) => sum + item.pagado, 0);
   const saldo = balanceMatch ? parseArgMoney(balanceMatch[1]) : Number(Math.max(total - pagado, 0).toFixed(2));
@@ -101,7 +116,8 @@ clientsRouter.get("/:id", async (req, res) => {
 });
 
 clientsRouter.post("/importar-historial", requireRoles(Rol.ADMINISTRADOR, Rol.EMPLEADO), async (req, res) => {
-  const texto = String(req.body?.texto ?? "");
+  const pdfBase64 = typeof req.body?.pdfBase64 === "string" ? req.body.pdfBase64 : "";
+  const texto = pdfBase64 ? await extractPdfTextFromBase64(pdfBase64) : String(req.body?.texto ?? "");
   const actualizarSaldo = req.body?.actualizarSaldo !== false;
   if (texto.trim().length < 50) fail(422, "TEXTO_INVALIDO", "Pegá el texto completo del informe del cliente");
   const parsed = parseHistoricalClientReport(texto);

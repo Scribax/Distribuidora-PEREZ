@@ -16,6 +16,8 @@ export function ClientsView({ api, canWrite, canEditBalance }: { api: ReturnType
   const [q, setQ] = useState("");
   const [error, setError] = useState("");
   const [importText, setImportText] = useState("");
+  const [importPdf, setImportPdf] = useState<File | null>(null);
+  const [importFileKey, setImportFileKey] = useState(0);
   const [updateImportedBalance, setUpdateImportedBalance] = useState(true);
   const load = (term = q, nextPage = page): Promise<void> => api(`/clientes?${qs({ q: term, page: nextPage, pageSize: CLIENTS_PAGE_SIZE })}`).then((d) => {
     const resultTotal = d.total ?? d.items.length;
@@ -89,8 +91,11 @@ export function ClientsView({ api, canWrite, canEditBalance }: { api: ReturnType
     event.preventDefault();
     setError("");
     try {
-      const result = await api("/clientes/importar-historial", { method: "POST", body: JSON.stringify({ texto: importText, actualizarSaldo: updateImportedBalance }) });
+      const pdfBase64 = importPdf ? await fileToBase64(importPdf) : undefined;
+      const result = await api("/clientes/importar-historial", { method: "POST", body: JSON.stringify({ texto: importText, pdfBase64, actualizarSaldo: updateImportedBalance }) });
       setImportText("");
+      setImportPdf(null);
+      setImportFileKey((current) => current + 1);
       await load(q, 1);
       await openClient(result.cliente);
     } catch (err: any) {
@@ -131,16 +136,28 @@ export function ClientsView({ api, canWrite, canEditBalance }: { api: ReturnType
       <ClientDetail client={selectedClient} canWrite={canWrite} canEditBalance={canEditBalance} onUpdate={updateClient} onDelete={deleteClient} onClose={() => setSelectedClient(null)} onPdf={openClientRemitoPdf} />
     </div>}
     {canWrite && <section className="panel import-history-panel">
-      <div className="detail-head"><div><h2>Importar historial anterior</h2><span>Pegá el texto copiado del PDF del cliente. Se guarda como historial y no modifica stock.</span></div></div>
+      <div className="detail-head"><div><h2>Importar historial anterior</h2><span>Subí el PDF anterior del cliente o pegá el texto copiado. Se guarda como historial y no modifica stock.</span></div></div>
       <form className="form import-history-form" onSubmit={importHistory}>
-        <textarea value={importText} onChange={(event) => setImportText(event.target.value)} placeholder="Pegá acá el informe del cliente copiado desde el PDF..." rows={7} required />
+        <label className="field-label"><span>PDF del cliente</span><input key={importFileKey} type="file" accept="application/pdf,.pdf" onChange={(event) => setImportPdf(event.target.files?.[0] ?? null)} /></label>
+        <textarea value={importText} onChange={(event) => setImportText(event.target.value)} placeholder="Opcional: pegá acá el informe del cliente copiado desde el PDF..." rows={7} required={!importPdf} />
         <label className="checkbox-line"><input type="checkbox" checked={updateImportedBalance} onChange={(event) => setUpdateImportedBalance(event.target.checked)} />Actualizar saldo pendiente con el saldo debido del informe</label>
         {error && <p className="error">{error}</p>}
-        <button>Importar historial</button>
+        <button>{importPdf ? `Importar ${importPdf.name}` : "Importar historial"}</button>
       </form>
     </section>}
     {canWrite && <section className="panel"><h2>Nuevo cliente</h2><form className="form client-form" onSubmit={create}><ClientFields />{error && <p className="error">{error}</p>}<button>Crear cliente</button></form></section>}
   </div>;
+}
+
+async function fileToBase64(file: File) {
+  const buffer = await file.arrayBuffer();
+  let binary = "";
+  const bytes = new Uint8Array(buffer);
+  const chunkSize = 0x8000;
+  for (let index = 0; index < bytes.length; index += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(index, index + chunkSize));
+  }
+  return btoa(binary);
 }
 
 function clientBody(form: Record<string, FormDataEntryValue>) {
