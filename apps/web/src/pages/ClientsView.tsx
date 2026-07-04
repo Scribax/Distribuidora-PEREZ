@@ -62,9 +62,23 @@ export function ClientsView({ api, canWrite, canEditBalance }: { api: ReturnType
     return filteredCobros.reduce((sum, c) => sum + Number(c.saldo), 0);
   }, [filteredCobros]);
 
-  const copyMessage = async (id: string, mensaje: string) => {
+  // Mensaje construido en el frontend (Vite maneja UTF-8 correctamente)
+  const buildMensaje = (nombre: string, saldo: number) => {
+    const saldoFmt = money(saldo);
+    return [
+      `¡Hola ${nombre}! 👋🏻`,
+      `Le recuerdo el saldo debido de ${saldoFmt} ‼️`,
+      `Para transferir, el Alias: perezmartin.pagos a nombre de Eduardo Gregorio Perez.`,
+      `Aviseme si quiere que pase a cobrar en efectivo y si hace falta que lleve algún pedido.`,
+      `Muchas gracias 😃`,
+      `Distribuidora Perez Martin 🧢`,
+    ].join("\n");
+  };
+
+  const copyMessage = async (id: string, cobro: any) => {
     try {
-      await navigator.clipboard.writeText(mensaje);
+      const texto = buildMensaje(cobro.cliente_nombre, cobro.saldo);
+      await navigator.clipboard.writeText(texto);
       setCopiedId(id);
       setTimeout(() => setCopiedId(null), 2000);
     } catch {
@@ -73,9 +87,8 @@ export function ClientsView({ api, canWrite, canEditBalance }: { api: ReturnType
   };
 
   const registrarYEnviar = async (cobro: any) => {
-    // Construimos la URL en el browser para que encodeURIComponent maneje
-    // los emojis correctamente sin depender del encoding del servidor
-    const waUrl = `https://wa.me/${cobro.telefono_whatsapp}?text=${encodeURIComponent(cobro.mensaje)}`;
+    const texto = buildMensaje(cobro.cliente_nombre, cobro.saldo);
+    const waUrl = `https://wa.me/${cobro.telefono_whatsapp}?text=${encodeURIComponent(texto)}`;
     const win = window.open(waUrl, "_blank", "noopener,noreferrer");
     if (!win) {
       window.alert("Permití ventanas emergentes para abrir WhatsApp");
@@ -313,7 +326,7 @@ export function ClientsView({ api, canWrite, canEditBalance }: { api: ReturnType
                     <button
                       type="button"
                       className="secondary"
-                      onClick={() => copyMessage(cobro.remito_id, cobro.mensaje)}
+                      onClick={() => copyMessage(cobro.remito_id, cobro)}
                     >
                       {copiedId === cobro.remito_id ? "¡Copiado!" : "Copiar"}
                     </button>
