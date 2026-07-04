@@ -83,6 +83,7 @@ model User {
   movimientos   MovimientoStock[]
   gastos        Gasto[]
   cuentaComercialMovimientos CuentaComercialMovimiento[]
+  clienteHistorialImportaciones ClienteHistorialImportacion[]
   auditoria     AuditLog[]
   createdAt     DateTime          @default(now()) @map("created_at")
   updatedAt     DateTime          @updatedAt @map("updated_at")
@@ -180,11 +181,47 @@ model Cliente {
   saldoPendiente  Decimal   @default(0) @map("saldo_pendiente") @db.Decimal(12, 2)
   activo          Boolean   @default(true)
   remitos         Remito[]
+  historialImportado ClienteHistorialImportacion[]
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
 
   @@index([activo])
   @@map("clientes")
+}
+
+model ClienteHistorialImportacion {
+  id             String                    @id @default(uuid()) @db.Uuid
+  clienteId      String                    @map("cliente_id") @db.Uuid
+  origen         String                    @default("PDF") @db.VarChar(40)
+  nombreOriginal String                    @map("nombre_original") @db.VarChar(150)
+  total          Decimal                   @default(0) @db.Decimal(12, 2)
+  pagado         Decimal                   @default(0) @db.Decimal(12, 2)
+  saldo          Decimal                   @default(0) @db.Decimal(12, 2)
+  usuarioId      String                    @map("usuario_id") @db.Uuid
+  cliente        Cliente                   @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  usuario        User                      @relation(fields: [usuarioId], references: [id])
+  facturas       ClienteFacturaHistorica[]
+  createdAt      DateTime                  @default(now()) @map("created_at")
+
+  @@index([clienteId])
+  @@index([createdAt])
+  @@map("clientes_historial_importaciones")
+}
+
+model ClienteFacturaHistorica {
+  id            String                      @id @default(uuid()) @db.Uuid
+  importacionId String                      @map("importacion_id") @db.Uuid
+  numero        Int
+  fecha         DateTime                    @db.Date
+  subtotal      Decimal                     @default(0) @db.Decimal(12, 2)
+  impuesto      Decimal                     @default(0) @db.Decimal(12, 2)
+  pagado        Decimal                     @default(0) @db.Decimal(12, 2)
+  total         Decimal                     @default(0) @db.Decimal(12, 2)
+  importacion   ClienteHistorialImportacion @relation(fields: [importacionId], references: [id], onDelete: Cascade)
+
+  @@index([importacionId])
+  @@index([fecha])
+  @@map("clientes_facturas_historicas")
 }
 
 model Compra {

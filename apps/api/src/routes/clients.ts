@@ -13,6 +13,7 @@ export const clientsRouter = Router();
 clientsRouter.use(requireAuth);
 
 const deletedClientsBackupDir = path.resolve(process.cwd(), "backups/clientes-eliminados");
+const amountPattern = String.raw`\$?\s*\d{1,3}(?:\.\d{3})*,\d{2}`;
 
 function backupFileName(clientName: string, clientId: string) {
   const safeName = clientName.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9_-]+/g, "-").replace(/^-|-$/g, "").slice(0, 80) || "cliente";
@@ -22,6 +23,51 @@ function backupFileName(clientName: string, clientId: string) {
 function remitoDebt(total: number, montoPagado: number, pagoEstado?: string) {
   if (pagoEstado === "PAGADA") return 0;
   return Number(Math.max(total - montoPagado, 0).toFixed(2));
+}
+
+function parseArgMoney(value: string) {
+  const normalized = value.replace(/\$/g, "").replace(/\s/g, "").replace(/\./g, "").replace(",", ".");
+  const amount = Number(normalized);
+  return Number.isFinite(amount) ? Number(amount.toFixed(2)) : 0;
+}
+
+function parseArgDate(value: string) {
+  const [day, month, year] = value.split("/").map(Number);
+  return new Date(year, month - 1, day);
+}
+
+function parseHistoricalClientReport(text: string) {
+  const source = text.replace(/\r/g, "\n");
+  const compact = source.replace(/\s+/g, " ").trim();
+  const titleMatch = compact.match(/Informe del cliente para\s+(.+?)(?:\s+-\s+|\s{2,}| Número | Fecha | Subtotal |$)/i);
+  const tableIndex = source.search(/Número|Numero/i);
+  const beforeTable = tableIndex >= 0 ? source.slice(0, tableIndex) : source;
+  const uppercaseNames = beforeTable.split("\n").map((line) => line.trim()).filter((line) => /^[A-ZÁÉÍÓÚÑ0-9 .'-]{3,}$/.test(line) && !/INFORME|DISTRIBUIDORA/.test(line));
+  const nombre = (titleMatch?.[1] ?? uppercaseNames.at(-1) ?? "").replace(/\s+-\s*$/, "").trim();
+  if (!nombre) fail(422, "CLIENTE_NO_DETECTADO", "No pude detectar el nombre del cliente en el informe");
+
+  const rowRe = new RegExp(String.raw`^\s*(\d+)\s+(\d{2}\/\d{2}\/\d{4})\s+(${amountPattern})\s+(${amountPattern})\s+(${amountPattern})\s+(${amountPattern})(?:\s*ARS)?\s*$`);
+  const facturas = source.split("\n").map((line) => line.replace(/\s+/g, " ").trim()).map((line) => {
+    const match = line.match(rowRe);
+    if (!match) return null;
+    return {
+      numero: Number(match[1]),
+      fecha: parseArgDate(match[2]),
+      subtotal: parseArgMoney(match[3]),
+      impuesto: parseArgMoney(match[4]),
+      pagado: parseArgMoney(match[5]),
+      total: parseArgMoney(match[6])
+    };
+  }).filter(Boolean) as { numero: number; fecha: Date; subtotal: number; impuesto: number; pagado: number; total: number }[];
+  if (!facturas.length) fail(422, "FACTURAS_NO_DETECTADAS", "No pude detectar facturas en el informe. Probá copiar el texto completo del PDF");
+
+  const totalMatch = compact.match(new RegExp(String.raw`Total\s+(${amountPattern})\s*ARS`, "i"));
+  const paidMatch = compact.match(new RegExp(String.raw`Pagado\s+(${amountPattern})\s*ARS`, "i"));
+  const balanceMatch = compact.match(new RegExp(String.raw`Saldo debido\s+(${amountPattern})\s*ARS`, "i"));
+  const total = totalMatch ? parseArgMoney(totalMatch[1]) : facturas.reduce((sum, item) => sum + item.total, 0);
+  const pagado = paidMatch ? parseArgMoney(paidMatch[1]) : facturas.reduce((sum, item) => sum + item.pagado, 0);
+  const saldo = balanceMatch ? parseArgMoney(balanceMatch[1]) : Number(Math.max(total - pagado, 0).toFixed(2));
+  return { nombre, facturas, total, pagado, saldo };
 }
 
 clientsRouter.get("/", async (req, res) => {
@@ -45,10 +91,51 @@ clientsRouter.get("/:id", async (req, res) => {
   const id = String(req.params.id);
   const cliente = await prisma.cliente.findUnique({
     where: { id },
-    include: { remitos: { orderBy: { fecha: "desc" }, take: 50, include: { items: true, vendedor: true } } }
+    include: {
+      remitos: { orderBy: { fecha: "desc" }, take: 50, include: { items: true, vendedor: true } },
+      historialImportado: { orderBy: { createdAt: "desc" }, include: { facturas: { orderBy: { fecha: "desc" } } } }
+    }
   });
   if (!cliente) fail(404, "CLIENTE_NO_ENCONTRADO", "Cliente no encontrado");
   res.json(cliente);
+});
+
+clientsRouter.post("/importar-historial", requireRoles(Rol.ADMINISTRADOR, Rol.EMPLEADO), async (req, res) => {
+  const texto = String(req.body?.texto ?? "");
+  const actualizarSaldo = req.body?.actualizarSaldo !== false;
+  if (texto.trim().length < 50) fail(422, "TEXTO_INVALIDO", "Pegá el texto completo del informe del cliente");
+  const parsed = parseHistoricalClientReport(texto);
+  const result = await prisma.$transaction(async (tx) => {
+    let cliente = await tx.cliente.findFirst({ where: { nombre: { equals: parsed.nombre, mode: "insensitive" } } });
+    if (!cliente) {
+      cliente = await tx.cliente.create({ data: { nombre: parsed.nombre, saldoPendiente: actualizarSaldo ? parsed.saldo : 0 } });
+    } else if (actualizarSaldo) {
+      cliente = await tx.cliente.update({ where: { id: cliente.id }, data: { saldoPendiente: parsed.saldo } });
+    }
+    const importacion = await tx.clienteHistorialImportacion.create({
+      data: {
+        clienteId: cliente.id,
+        nombreOriginal: parsed.nombre,
+        total: parsed.total,
+        pagado: parsed.pagado,
+        saldo: parsed.saldo,
+        usuarioId: req.user!.id,
+        facturas: { create: parsed.facturas }
+      },
+      include: { facturas: { orderBy: { fecha: "desc" } } }
+    });
+    await audit({
+      usuarioId: req.user!.id,
+      modulo: "Clientes",
+      accion: "CREAR",
+      entidad: "Historial anterior",
+      entidadId: importacion.id,
+      descripcion: `Importó historial anterior de ${cliente.nombre}`,
+      cambios: { facturas: parsed.facturas.length, total: parsed.total, pagado: parsed.pagado, saldo: parsed.saldo, saldoActualizado: actualizarSaldo }
+    }, tx);
+    return { cliente, importacion };
+  });
+  res.status(201).json(result);
 });
 
 clientsRouter.post("/", requireRoles(Rol.ADMINISTRADOR, Rol.EMPLEADO), async (req, res) => {
@@ -99,7 +186,8 @@ clientsRouter.delete("/:id", requireRoles(Rol.ADMINISTRADOR), async (req, res) =
           usuario: { select: { id: true, nombre: true, email: true, rol: true } }
         },
         orderBy: { fecha: "desc" }
-      }
+      },
+      historialImportado: { include: { facturas: true } }
     }
   });
   if (!cliente) fail(404, "CLIENTE_NO_ENCONTRADO", "Cliente no encontrado");

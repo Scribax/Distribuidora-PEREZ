@@ -43,6 +43,26 @@ export default function App() {
     ["stock", PackagePlus, "Stock"],
     ...(session.user.rol === "ADMINISTRADOR" ? [["usuarios", UserCog, "Usuarios"] as const] : [])
   ] as const;
+  const viewHelp: Record<string, string> = {
+    dashboard: "Resumen del negocio y accesos rapidos",
+    productos: "Alta, precios y catalogo de mercaderia",
+    clientes: "Datos, saldos e historial de compradores",
+    compras: "Ingreso de mercaderia y proveedores",
+    remitos: "Carga de ventas, boletas y pagos",
+    gastos: "Egresos operativos del mes",
+    balance: "Caja, deudas y resultado general",
+    informes: "Reportes y auditoria de movimientos",
+    comerciales: "Vendedores, cuentas y comisiones",
+    stock: "Existencias, minimos y ajustes",
+    usuarios: "Permisos y cuentas del sistema"
+  };
+  const currentLabel = nav.find(([id]) => id === view)?.[2] ?? "Dashboard";
+  const bottomNav = [
+    ["dashboard", BarChart3, "Inicio"],
+    ["remitos", ReceiptText, "Ventas"],
+    ["clientes", Users, "Clientes"],
+    ["stock", PackagePlus, "Stock"]
+  ] as const;
   return <div className={`app ${navOpen ? "nav-open" : ""}`}>
     <button type="button" className="mobile-menu-button" onClick={() => setNavOpen(true)} title="Abrir menú"><Menu size={20} />Menú</button>
     {navOpen && <button type="button" className="nav-scrim" onClick={() => setNavOpen(false)} aria-label="Cerrar menú" />}
@@ -54,8 +74,15 @@ export default function App() {
       <button className="logout" onClick={() => { localStorage.removeItem("perez_session"); setSession(null); }}><LogOut size={18} />Salir</button>
     </aside>
     <section className="workspace">
-      <header><h1>{nav.find(([id]) => id === view)?.[2]}</h1><span>{session.user.nombre} · {session.user.rol}</span></header>
-      {view === "dashboard" && <DashboardView api={api} />}
+      <header className="workspace-header">
+        <div>
+          <span className="eyebrow">Distribuidora Perez Martin</span>
+          <h1>{currentLabel}</h1>
+          <p>{viewHelp[view]}</p>
+        </div>
+        <span className="user-pill">{session.user.nombre} · {session.user.rol}</span>
+      </header>
+      {view === "dashboard" && <DashboardView api={api} onNavigate={setView} />}
       {view === "productos" && <ProductsView api={api} canWrite={session.user.rol !== "CONSULTA"} isAdmin={session.user.rol === "ADMINISTRADOR"} />}
       {view === "clientes" && <ClientsView api={api} canWrite={session.user.rol !== "CONSULTA"} canEditBalance={session.user.rol === "ADMINISTRADOR"} />}
       {view === "compras" && <PurchasesView api={api} canWrite={session.user.rol !== "CONSULTA"} isAdmin={session.user.rol === "ADMINISTRADOR"} />}
@@ -67,5 +94,11 @@ export default function App() {
       {view === "stock" && <StockView api={api} isAdmin={session.user.rol === "ADMINISTRADOR"} />}
       {view === "usuarios" && <UsersView api={api} />}
     </section>
+    <nav className="mobile-bottom-nav" aria-label="Accesos rápidos">
+      {bottomNav.map(([id, Icon, label]) => <button key={id} type="button" className={view === id ? "active" : ""} onClick={() => { setView(id); setNavOpen(false); }}>
+        <Icon size={20} />
+        <span>{label}</span>
+      </button>)}
+    </nav>
   </div>;
 }

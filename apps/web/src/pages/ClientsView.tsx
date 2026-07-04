@@ -15,6 +15,8 @@ export function ClientsView({ api, canWrite, canEditBalance }: { api: ReturnType
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [q, setQ] = useState("");
   const [error, setError] = useState("");
+  const [importText, setImportText] = useState("");
+  const [updateImportedBalance, setUpdateImportedBalance] = useState(true);
   const load = (term = q, nextPage = page): Promise<void> => api(`/clientes?${qs({ q: term, page: nextPage, pageSize: CLIENTS_PAGE_SIZE })}`).then((d) => {
     const resultTotal = d.total ?? d.items.length;
     if (!d.items.length && resultTotal > 0 && nextPage > 1) return load(term, nextPage - 1);
@@ -83,6 +85,18 @@ export function ClientsView({ api, canWrite, canEditBalance }: { api: ReturnType
       setError(err.message ?? "No se pudo abrir el PDF");
     }
   }
+  async function importHistory(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError("");
+    try {
+      const result = await api("/clientes/importar-historial", { method: "POST", body: JSON.stringify({ texto: importText, actualizarSaldo: updateImportedBalance }) });
+      setImportText("");
+      await load(q, 1);
+      await openClient(result.cliente);
+    } catch (err: any) {
+      setError(err.message ?? "No se pudo importar el historial");
+    }
+  }
   const clientRows = clients.map((client) => ({ ...client, saldoFmt: money(client.saldoPendiente), estadoFmt: client.activo ? "Activo" : "Inactivo" }));
   const totalSaldo = clients.reduce((sum, client) => sum + Number(client.saldoPendiente), 0);
   const activeCount = clients.filter((client) => client.activo).length;
@@ -116,6 +130,15 @@ export function ClientsView({ api, canWrite, canEditBalance }: { api: ReturnType
     {selectedClient && <div className="modal-backdrop client-modal-backdrop" role="dialog" aria-modal="true" aria-label={`Cliente ${selectedClient.nombre}`} onClick={() => setSelectedClient(null)}>
       <ClientDetail client={selectedClient} canWrite={canWrite} canEditBalance={canEditBalance} onUpdate={updateClient} onDelete={deleteClient} onClose={() => setSelectedClient(null)} onPdf={openClientRemitoPdf} />
     </div>}
+    {canWrite && <section className="panel import-history-panel">
+      <div className="detail-head"><div><h2>Importar historial anterior</h2><span>Pegá el texto copiado del PDF del cliente. Se guarda como historial y no modifica stock.</span></div></div>
+      <form className="form import-history-form" onSubmit={importHistory}>
+        <textarea value={importText} onChange={(event) => setImportText(event.target.value)} placeholder="Pegá acá el informe del cliente copiado desde el PDF..." rows={7} required />
+        <label className="checkbox-line"><input type="checkbox" checked={updateImportedBalance} onChange={(event) => setUpdateImportedBalance(event.target.checked)} />Actualizar saldo pendiente con el saldo debido del informe</label>
+        {error && <p className="error">{error}</p>}
+        <button>Importar historial</button>
+      </form>
+    </section>}
     {canWrite && <section className="panel"><h2>Nuevo cliente</h2><form className="form client-form" onSubmit={create}><ClientFields />{error && <p className="error">{error}</p>}<button>Crear cliente</button></form></section>}
   </div>;
 }
@@ -146,6 +169,7 @@ function ClientFields({ client }: { client?: Client }) {
 function ClientDetail({ client, canWrite, canEditBalance, onUpdate, onDelete, onClose, onPdf }: { client: Client; canWrite: boolean; canEditBalance: boolean; onUpdate: (event: React.FormEvent<HTMLFormElement>) => void; onDelete: (client: Client) => void; onClose: () => void; onPdf: (row: any) => void }) {
   const [editing, setEditing] = useState(false);
   const remitos = client.remitos ?? [];
+  const historialImportado = (client as any).historialImportado ?? [];
   const activeRemitos = remitos.filter((r) => r.estado === "ACTIVO");
   const totalRemitos = activeRemitos.reduce((sum, r) => sum + Number(r.total), 0);
   const lastRemito = remitos[0];
@@ -164,11 +188,29 @@ function ClientDetail({ client, canWrite, canEditBalance, onUpdate, onDelete, on
     <div className="client-info-grid">
       <InfoItem label="Estado" value={client.activo ? "Activo" : "Inactivo"} /><InfoItem label="Teléfono" value={client.telefono || "-"} /><InfoItem label="Email" value={client.email || "-"} /><InfoItem label="Dirección" value={client.direccion || "-"} />
     </div>
+    <div className="client-remittances"><h3>Historial anterior importado</h3><span>Facturas viejas cargadas desde PDF. No descuentan stock ni cuentan como ventas nuevas.</span><div className="historical-list">{historialImportado.map((importacion: any) => <HistoricalImportCard importacion={importacion} key={importacion.id} />)}{!historialImportado.length && <p className="muted">Este cliente no tiene historial anterior importado.</p>}</div></div>
     <div className="client-remittances"><h3>Boletas del cliente</h3><span>Primero aparecen las que tienen saldo pendiente.</span><div className="client-remito-list">{remitoRows.map((row) => <ClientRemitoCard row={row} key={row.id} onPdf={onPdf} />)}{!remitoRows.length && <p className="muted">Este cliente todavía no tiene boletas.</p>}</div></div>
     {canWrite && <div className="client-edit-box"><button type="button" className="secondary" onClick={() => setEditing(true)}>Editar datos del cliente</button></div>}
     {canEditBalance && <div className="client-danger-zone"><div><strong>Eliminar definitivamente</strong><span>Solo se permite si el cliente no tiene boletas ni historial asociado.</span></div><button type="button" className="danger" onClick={() => onDelete(client)}>Eliminar cliente</button></div>}
     {editing && <ClientEditModal client={client} canEditBalance={canEditBalance} onUpdate={onUpdate} onClose={() => setEditing(false)} />}
   </section>;
+}
+
+function HistoricalImportCard({ importacion }: { importacion: any }) {
+  const [open, setOpen] = useState(false);
+  const facturas = importacion.facturas ?? [];
+  return <article className="historical-card">
+    <button type="button" className="historical-summary" onClick={() => setOpen(!open)}>
+      <div><strong>{importacion.nombreOriginal}</strong><span>{new Date(importacion.createdAt).toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" })} · {facturas.length} factura{facturas.length === 1 ? "" : "s"} importada{facturas.length === 1 ? "" : "s"}</span></div>
+      <div className="historical-summary-values"><span>Total <strong>{money(importacion.total)}</strong></span><span>Pagado <strong>{money(importacion.pagado)}</strong></span><span>Saldo <strong>{money(importacion.saldo)}</strong></span></div>
+      <span className="mini-chip">{open ? "Ocultar facturas" : "Ver facturas"}</span>
+    </button>
+    {open && <div className="historical-invoices">
+      <div className="historical-invoice head"><strong>Nro</strong><strong>Fecha</strong><strong>Total</strong><strong>Pagado</strong></div>
+      {facturas.map((factura: any) => <div className="historical-invoice" key={factura.id}><span>#{factura.numero}</span><span>{formatDate(factura.fecha)}</span><span>{money(factura.total)}</span><span>{money(factura.pagado)}</span></div>)}
+      <div className="historical-total"><span>Total {money(importacion.total)}</span><span>Pagado {money(importacion.pagado)}</span><span>Saldo {money(importacion.saldo)}</span></div>
+    </div>}
+  </article>;
 }
 
 function ClientEditModal({ client, canEditBalance, onUpdate, onClose }: { client: Client; canEditBalance: boolean; onUpdate: (event: React.FormEvent<HTMLFormElement>) => void; onClose: () => void }) {

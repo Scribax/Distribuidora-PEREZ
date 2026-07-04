@@ -18,6 +18,6 @@ function get(row: any, key: string) {
 }
 
 export function Table({ rows, cols, onRowClick, actions }: { rows: any[]; cols: [string, string][]; onRowClick?: (row: any) => void; actions?: (row: any) => React.ReactNode }) {
-  return <div className="table-wrap"><table><thead><tr>{cols.map(([, label]) => <th key={label}>{label}</th>)}{actions && <th>Acciones</th>}</tr></thead><tbody>{rows.map((row, i) => <tr key={row.id ?? i} className={onRowClick ? "clickable-row" : undefined} onClick={() => onRowClick?.(row)}>{cols.map(([key]) => <td key={key}>{String(get(row, key) ?? "-").slice(0, 90)}</td>)}{actions && <td onClick={(event) => event.stopPropagation()}>{actions(row)}</td>}</tr>)}</tbody></table>{!rows.length && <p>No hay registros.</p>}</div>;
+  return <div className="table-wrap responsive-table"><table><thead><tr>{cols.map(([, label]) => <th key={label}>{label}</th>)}{actions && <th>Acciones</th>}</tr></thead><tbody>{rows.map((row, i) => <tr key={row.id ?? i} className={onRowClick ? "clickable-row" : undefined} onClick={() => onRowClick?.(row)}>{cols.map(([key, label]) => <td key={key} data-label={label}>{String(get(row, key) ?? "-").slice(0, 90)}</td>)}{actions && <td data-label="Acciones" onClick={(event) => event.stopPropagation()}>{actions(row)}</td>}</tr>)}</tbody></table>{!rows.length && <p>No hay registros.</p>}</div>;
 }
 
