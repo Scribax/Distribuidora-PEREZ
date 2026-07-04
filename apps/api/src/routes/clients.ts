@@ -123,10 +123,10 @@ function normalizePhoneForWhatsApp(telefono?: string | null, defaultCountryCode 
 
 function buildCobroMessage(row: { saldo: number }): string {
   const saldoFmt = money(row.saldo);
-  const wave   = "\u{1F44B}\u{1F3FB}";
-  const bang   = "\u{203C}\u{FE0F}";
-  const smile  = "\u{1F603}";
-  const cap    = "\u{1F9E2}";
+  const wave  = String.fromCharCode(0xD83D, 0xDC4B, 0xD83C, 0xDFFB);
+  const bang  = String.fromCharCode(0x203C, 0xFE0F);
+  const smile = String.fromCharCode(0xD83D, 0xDE03);
+  const cap   = String.fromCharCode(0xD83E, 0xDDE2);
   return [
     `\u00A1Hola! ${wave}`,
     `Le recuerdo el saldo debido de ${saldoFmt} ${bang}`,

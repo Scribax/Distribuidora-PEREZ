@@ -64,10 +64,10 @@ export function ClientsView({ api, canWrite, canEditBalance }: { api: ReturnType
 
   const buildMensaje = (saldo: number) => {
     const saldoFmt = money(saldo);
-    const wave  = String.fromCodePoint(0x1F44B, 0x1F3FB);
-    const bang  = String.fromCodePoint(0x203C, 0xFE0F);
-    const smile = String.fromCodePoint(0x1F603);
-    const cap   = String.fromCodePoint(0x1F9E2);
+    const wave  = String.fromCharCode(0xD83D, 0xDC4B, 0xD83C, 0xDFFB);
+    const bang  = String.fromCharCode(0x203C, 0xFE0F);
+    const smile = String.fromCharCode(0xD83D, 0xDE03);
+    const cap   = String.fromCharCode(0xD83E, 0xDDE2);
     return [
       "\u00A1Hola! " + wave,
       "Le recuerdo el saldo debido de " + saldoFmt + " " + bang,
