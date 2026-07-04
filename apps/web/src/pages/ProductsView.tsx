@@ -62,7 +62,7 @@ export function ProductsView({ api, canWrite, isAdmin }: { api: ReturnType<typeo
     }
   }
   async function deleteProduct(product: Product) {
-    if (!confirmAction(`¿Eliminar el producto ${product.nombre}? Quedará inactivo y no aparecerá para nuevas compras o boletas.`)) return;
+    if (!confirmAction(`¿Eliminar el producto ${product.nombre}? Si no tiene historial de ventas o compras, se borrará definitivamente del sistema. Si ya tiene historial, quedará inactivo.`)) return;
     setError("");
     try {
       await api(`/productos/${product.id}`, { method: "DELETE" });
@@ -170,7 +170,7 @@ function ProductCard({ product, selected, isAdmin, onOpen, onDelete }: { product
       </div>
       <span className={`status-chip ${product.activo ? "activo" : "cancelado"}`}>{product.activo ? "Activo" : "Inactivo"}</span>
     </button>
-    {isAdmin && product.activo && <button type="button" className="icon-button product-delete" onClick={() => onDelete(product)} title="Eliminar producto"><Trash2 size={16} /></button>}
+    {isAdmin && <button type="button" className="icon-button product-delete" onClick={() => onDelete(product)} title="Eliminar producto"><Trash2 size={16} /></button>}
   </article>;
 }
 
@@ -204,7 +204,7 @@ function ProductDetail({ product, categories, canWrite, isAdmin, onUpdate, onDel
   const stockValue = Number(product.costo) * product.stockActual;
   return <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label={`Detalle de ${product.nombre}`}>
   <section className="product-detail-modal">
-    <div className="detail-head"><div><h2>{product.nombre}</h2><span>{product.codigoInterno} · {product.categoria?.nombre ?? "Sin categoría"} · {product.activo ? "Activo" : "Inactivo"}</span></div><div className="table-actions">{isAdmin && product.activo && <button type="button" className="danger" onClick={onDelete}>Eliminar</button>}<button type="button" className="icon-button" onClick={onClose} title="Cerrar detalle"><X size={18} /></button></div></div>
+    <div className="detail-head"><div><h2>{product.nombre}</h2><span>{product.codigoInterno} · {product.categoria?.nombre ?? "Sin categoría"} · {product.activo ? "Activo" : "Inactivo"}</span></div><div className="table-actions">{isAdmin && <button type="button" className="danger" onClick={onDelete}>Eliminar</button>}<button type="button" className="icon-button" onClick={onClose} title="Cerrar detalle"><X size={18} /></button></div></div>
     <div className="detail-grid">
       <Metric label="Stock actual" value={String(product.stockActual)} /><Metric label="Stock mínimo" value={String(product.stockMinimo)} /><Metric label="Costo" value={money(product.costo)} /><Metric label="Valor stock" value={money(stockValue)} /><Metric label="Mayorista" value={money(product.precioMayorista)} /><Metric label="Minorista" value={money(product.precioMinorista)} />
     </div>

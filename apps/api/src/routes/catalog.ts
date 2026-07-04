@@ -199,20 +199,47 @@ catalogRouter.delete("/productos/:id", requireRoles(Rol.ADMINISTRADOR), async (r
   const id = String(req.params.id);
   const current = await prisma.producto.findUnique({ where: { id } });
   if (!current) fail(404, "PRODUCTO_NO_ENCONTRADO", "Producto no encontrado");
-  if (!current.activo) {
+
+  // Verificar si tiene historial en compras o remitos
+  const [comprasCount, remitosCount] = await Promise.all([
+    prisma.compraItem.count({ where: { productoId: id } }),
+    prisma.remitoItem.count({ where: { productoId: id } })
+  ]);
+
+  if (comprasCount > 0 || remitosCount > 0) {
+    // Si tiene historial, solo se puede desactivar
+    if (!current.activo) {
+      fail(422, "PRODUCTO_CON_HISTORIAL", "No se puede eliminar de forma definitiva porque tiene compras o ventas registradas en el sistema.");
+    }
+    const producto = await prisma.producto.update({ where: { id }, data: { activo: false } });
+    await audit({
+      usuarioId: req.user!.id,
+      modulo: "Productos",
+      accion: "DESACTIVAR",
+      entidad: "Producto",
+      entidadId: producto.id,
+      descripcion: `Desactivó el producto ${producto.nombre} (tiene historial)`,
+      cambios: diffFields(current, producto, ["activo"])
+    });
     res.status(204).send();
     return;
   }
-  const producto = await prisma.producto.update({ where: { id }, data: { activo: false } });
-  await audit({
-    usuarioId: req.user!.id,
-    modulo: "Productos",
-    accion: "DESACTIVAR",
-    entidad: "Producto",
-    entidadId: producto.id,
-    descripcion: `Desactivó el producto ${producto.nombre}`,
-    cambios: diffFields(current, producto, ["activo"])
+
+  // Si no tiene historial, eliminación física total (incluyendo sus movimientos de stock)
+  await prisma.$transaction(async (tx) => {
+    await tx.movimientoStock.deleteMany({ where: { productoId: id } });
+    await tx.producto.delete({ where: { id } });
+    await audit({
+      usuarioId: req.user!.id,
+      modulo: "Productos",
+      accion: "ELIMINAR",
+      entidad: "Producto",
+      entidadId: id,
+      descripcion: `Eliminó de forma definitiva el producto ${current.nombre}`,
+      cambios: { antes: current, despues: null }
+    }, tx);
   });
+
   res.status(204).send();
 });
 
