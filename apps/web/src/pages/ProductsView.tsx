@@ -11,14 +11,14 @@ export function ProductsView({ api, canWrite, isAdmin }: { api: ReturnType<typeo
   const [categories, setCategories] = useState<any[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [q, setQ] = useState("");
-  const [estado, setEstado] = useState("");
+  const [estado, setEstado] = useState("ACTIVO");
   const [categoriaId, setCategoriaId] = useState("");
   const [error, setError] = useState("");
   const load = (term = q, nextEstado = estado, nextCategoria = categoriaId) => Promise.all([
     api(`/productos?${qs({ q: term.trim(), estado: nextEstado, categoriaId: nextCategoria, pageSize: 100 })}`),
     api("/categorias")
   ]).then(([p, c]) => { setProducts(p.items); setCategories(c); });
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(q, "ACTIVO", categoriaId); }, []);
   async function refreshSelected(id?: string) {
     if (id) setSelectedProduct(await api(`/productos/${id}`));
   }
@@ -31,9 +31,9 @@ export function ProductsView({ api, canWrite, isAdmin }: { api: ReturnType<typeo
   }
   function clearFilter() {
     setQ("");
-    setEstado("");
+    setEstado("ACTIVO");
     setCategoriaId("");
-    load("", "", "");
+    load("", "ACTIVO", "");
   }
   async function create(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
