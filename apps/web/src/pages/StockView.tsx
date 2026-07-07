@@ -49,6 +49,17 @@ export function StockView({ api, isAdmin }: { api: ReturnType<typeof useApi>; is
     })
     .filter((product) => !hasMovementFilters || filters.productoId || movementsByProduct.has(product.id));
   const lowStockCount = products.filter((product) => product.stockActual <= product.stockMinimo).length;
+
+  const [productPage, setProductPage] = useState(1);
+  const productPageSize = 10;
+
+  useEffect(() => {
+    setProductPage(1);
+  }, [q, filters]);
+
+  const totalProductPages = Math.max(1, Math.ceil(visibleProducts.length / productPageSize));
+  const paginatedProducts = visibleProducts.slice((productPage - 1) * productPageSize, productPage * productPageSize);
+
   return <div className="stock-page">
     <section className="stock-hero">
       <div><h2>Stock</h2><span>Control de existencias por producto, movimientos y ajustes.</span></div>
@@ -74,8 +85,25 @@ export function StockView({ api, isAdmin }: { api: ReturnType<typeof useApi>; is
             <button>Filtrar</button><button type="button" className="secondary" onClick={() => { const clean = { productoId: "", tipo: "", fechaDesde: "", fechaHasta: "" }; setFilters(clean); setQ(""); load(clean); }}>Limpiar</button>
           </form>
         </div>
-        <div className="section-title stock-results-title"><h3>Productos</h3><span>{visibleProducts.length} visibles con los filtros actuales.</span></div>
-        <div className="stock-product-list">{visibleProducts.map((product) => <StockProductCard key={product.id} product={product} movements={movementsByProduct.get(product.id) ?? []} defaultOpen={filters.productoId === product.id} />)}{!visibleProducts.length && <p>No hay productos con movimientos para estos filtros.</p>}</div>
+        <div className="section-title stock-results-title">
+          <h3>Productos</h3>
+          <span>
+            {visibleProducts.length > 0 ? (
+              `${(productPage - 1) * productPageSize + 1}-${Math.min(productPage * productPageSize, visibleProducts.length)} de ${visibleProducts.length} visibles`
+            ) : (
+              "0 visibles"
+            )}
+          </span>
+        </div>
+        <div className="stock-product-list">
+          {paginatedProducts.map((product) => <StockProductCard key={product.id} product={product} movements={movementsByProduct.get(product.id) ?? []} defaultOpen={filters.productoId === product.id} />)}
+          {!visibleProducts.length && <p>No hay productos con movimientos para estos filtros.</p>}
+        </div>
+        {visibleProducts.length > productPageSize && <div className="pager stock-pager" style={{ marginTop: "1rem" }}>
+          <button type="button" className="secondary" onClick={() => setProductPage((p) => Math.max(1, p - 1))} disabled={productPage === 1}>Anterior</button>
+          <span>Página {productPage} de {totalProductPages}</span>
+          <button type="button" className="secondary" onClick={() => setProductPage((p) => Math.min(totalProductPages, p + 1))} disabled={productPage === totalProductPages}>Siguiente</button>
+        </div>}
       </section>
       {isAdmin && <section className="panel stock-adjust-panel"><div><h2>Ajuste manual</h2><span>Usalo solo para corregir diferencias físicas de stock.</span></div><form className="form" onSubmit={adjust}><select name="productoId" required><option value="">Producto</option>{products.map((p) => <option value={p.id} key={p.id}>{p.nombre} · actual {p.stockActual}</option>)}</select><input name="cantidadNueva" type="number" min="0" placeholder="Nueva cantidad" required /><input name="motivo" placeholder="Motivo del ajuste" required minLength={10} />{error && <p className="error">{error}</p>}<button>Registrar ajuste</button></form></section>}
     </div>
