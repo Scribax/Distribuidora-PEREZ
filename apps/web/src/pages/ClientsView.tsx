@@ -64,17 +64,13 @@ export function ClientsView({ api, canWrite, canEditBalance }: { api: ReturnType
 
   const buildMensaje = (saldo: number) => {
     const saldoFmt = money(saldo);
-    const wave  = String.fromCharCode(0xD83D, 0xDC4B, 0xD83C, 0xDFFB);
-    const bang  = String.fromCharCode(0x203C, 0xFE0F);
-    const smile = String.fromCharCode(0xD83D, 0xDE03);
-    const cap   = String.fromCharCode(0xD83E, 0xDDE2);
     return [
-      "\u00A1Hola! " + wave,
-      "Le recuerdo el saldo debido de " + saldoFmt + " " + bang,
+      "\u00A1Hola!",
+      "Le recuerdo el saldo debido de " + saldoFmt,
       "Para transferir, el Alias: perezmartin.pagos a nombre de Eduardo Gregorio Perez.",
       "Aviseme si quiere que pase a cobrar en efectivo y si hace falta que lleve alg\u00FAn pedido.",
-      "Muchas gracias " + smile,
-      "Distribuidora Perez Martin " + cap
+      "Muchas gracias",
+      "Distribuidora Perez Martin"
     ].join("\n\n");
   };
 
@@ -91,7 +87,10 @@ export function ClientsView({ api, canWrite, canEditBalance }: { api: ReturnType
 
   const registrarYEnviar = async (cobro: any) => {
     const texto = buildMensaje(cobro.saldo);
-    const waUrl = `https://wa.me/${cobro.telefono_whatsapp}?text=${encodeURIComponent(texto)}`;
+    // WhatsApp wa.me no decodifica bien los emojis si se usan %XX UTF-8
+    // Usamos + en vez de %20 para espacios (form encoding tradicional)
+    const textoEncoded = encodeURIComponent(texto).replace(/%20/g, "+");
+    const waUrl = `https://wa.me/${cobro.telefono_whatsapp}?text=${textoEncoded}`;
     const win = window.open(waUrl, "_blank", "noopener,noreferrer");
     if (!win) {
       window.alert("Permití ventanas emergentes para abrir WhatsApp");

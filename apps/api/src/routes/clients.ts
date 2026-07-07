@@ -123,17 +123,13 @@ function normalizePhoneForWhatsApp(telefono?: string | null, defaultCountryCode 
 
 function buildCobroMessage(row: { saldo: number }): string {
   const saldoFmt = money(row.saldo);
-  const wave  = String.fromCharCode(0xD83D, 0xDC4B, 0xD83C, 0xDFFB);
-  const bang  = String.fromCharCode(0x203C, 0xFE0F);
-  const smile = String.fromCharCode(0xD83D, 0xDE03);
-  const cap   = String.fromCharCode(0xD83E, 0xDDE2);
   return [
-    `\u00A1Hola! ${wave}`,
-    `Le recuerdo el saldo debido de ${saldoFmt} ${bang}`,
+    "\u00A1Hola!",
+    `Le recuerdo el saldo debido de ${saldoFmt}`,
     "Para transferir, el Alias: perezmartin.pagos a nombre de Eduardo Gregorio Perez.",
     "Aviseme si quiere que pase a cobrar en efectivo y si hace falta que lleve alg\u00FAn pedido.",
-    `Muchas gracias ${smile}`,
-    `Distribuidora Perez Martin ${cap}`
+    "Muchas gracias",
+    "Distribuidora Perez Martin"
   ].join("\n\n");
 }
 
