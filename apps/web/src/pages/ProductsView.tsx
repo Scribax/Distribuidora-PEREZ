@@ -15,7 +15,7 @@ export function ProductsView({ api, canWrite, isAdmin }: { api: ReturnType<typeo
   const [categoriaId, setCategoriaId] = useState("");
   const [error, setError] = useState("");
   const load = (term = q, nextEstado = estado, nextCategoria = categoriaId) => Promise.all([
-    api(`/productos?${qs({ q: term.trim(), estado: nextEstado, categoriaId: nextCategoria, pageSize: 100 })}`),
+    api(`/productos?${qs({ q: term.trim(), estado: nextEstado, categoriaId: nextCategoria, pageSize: 1000 })}`),
     api("/categorias")
   ]).then(([p, c]) => { setProducts(p.items); setCategories(c); });
   useEffect(() => { load(q, "ACTIVO", categoriaId); }, []);

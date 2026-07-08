@@ -16,7 +16,7 @@ export function StockView({ api, isAdmin }: { api: ReturnType<typeof useApi>; is
 
   const load = (next = filters) => Promise.all([
     api(`/stock/movimientos?${qs({ ...next, pageSize: 100 })}`),
-    api("/productos?pageSize=100&estado=ACTIVO"),
+    api("/productos?pageSize=1000&estado=ACTIVO"),
     api("/stock/stats")
   ]).then(([movs, prods, st]) => {
     setRows(movs.items);
