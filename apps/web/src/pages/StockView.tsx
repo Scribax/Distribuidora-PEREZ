@@ -12,10 +12,17 @@ export function StockView({ api, isAdmin }: { api: ReturnType<typeof useApi>; is
   const [filters, setFilters] = useState({ productoId: "", tipo: "", fechaDesde: "", fechaHasta: "" });
   const [q, setQ] = useState("");
   const [error, setError] = useState("");
+  const [stats, setStats] = useState({ totalProducts: 0, lowStockCount: 0, stockValue: 0 });
+
   const load = (next = filters) => Promise.all([
     api(`/stock/movimientos?${qs({ ...next, pageSize: 100 })}`),
-    api("/productos?pageSize=100")
-  ]).then(([movs, prods]) => { setRows(movs.items); setProducts(prods.items); });
+    api("/productos?pageSize=100&estado=ACTIVO"),
+    api("/stock/stats")
+  ]).then(([movs, prods, st]) => {
+    setRows(movs.items);
+    setProducts(prods.items);
+    setStats(st);
+  });
   useEffect(() => { load(); }, []);
   async function adjust(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -39,7 +46,6 @@ export function StockView({ api, isAdmin }: { api: ReturnType<typeof useApi>; is
     return map;
   }, [rows]);
   const hasMovementFilters = Boolean(filters.tipo || filters.fechaDesde || filters.fechaHasta);
-  const stockValue = products.reduce((sum, product) => sum + Number(product.costo) * product.stockActual, 0);
   const searchTerm = q.trim().toLowerCase();
   const visibleProducts = products
     .filter((product) => !filters.productoId || product.id === filters.productoId)
@@ -48,7 +54,6 @@ export function StockView({ api, isAdmin }: { api: ReturnType<typeof useApi>; is
       return [product.nombre, product.codigoInterno, product.categoria?.nombre].filter(Boolean).join(" ").toLowerCase().includes(searchTerm);
     })
     .filter((product) => !hasMovementFilters || filters.productoId || movementsByProduct.has(product.id));
-  const lowStockCount = products.filter((product) => product.stockActual <= product.stockMinimo).length;
 
   const [productPage, setProductPage] = useState(1);
   const productPageSize = 10;
@@ -64,10 +69,10 @@ export function StockView({ api, isAdmin }: { api: ReturnType<typeof useApi>; is
     <section className="stock-hero">
       <div><h2>Stock</h2><span>Control de existencias por producto, movimientos y ajustes.</span></div>
       <div className="stock-kpis">
-        <Metric label="Productos" value={String(products.length)} />
-        <Metric label="Stock bajo" value={String(lowStockCount)} />
+        <Metric label="Productos" value={String(stats.totalProducts)} />
+        <Metric label="Stock bajo" value={String(stats.lowStockCount)} />
         <Metric label="Movimientos" value={String(rows.length)} />
-        <Metric label="Valor stock" value={money(stockValue)} />
+        <Metric label="Valor stock" value={money(stats.stockValue)} />
       </div>
     </section>
     <div className="stock-layout">

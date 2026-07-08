@@ -263,10 +263,23 @@ catalogRouter.post("/stock/ajustes", requireRoles(Rol.ADMINISTRADOR), async (req
       entidad: "Producto",
       entidadId: producto.id,
       descripcion: `Ajustó stock de ${producto.nombre} de ${producto.stockActual} a ${input.cantidadNueva}`,
-      cambios: { stockActual: { antes: producto.stockActual, despues: input.cantidadNueva }, motivo: input.motivo }
     }, tx);
   });
   res.status(204).send();
+});
+
+catalogRouter.get("/stock/stats", async (req, res) => {
+  const [totalProducts, lowStockProducts, stockValueRows] = await Promise.all([
+    prisma.producto.count({ where: { activo: true } }),
+    prisma.producto.count({ where: { activo: true, stockActual: { lte: prisma.producto.fields.stockMinimo } } }),
+    prisma.producto.findMany({ where: { activo: true }, select: { costo: true, stockActual: true } })
+  ]);
+  const stockValue = stockValueRows.reduce((sum, p) => sum + Number(p.costo) * p.stockActual, 0);
+  res.json({
+    totalProducts,
+    lowStockCount: lowStockProducts,
+    stockValue
+  });
 });
 
 catalogRouter.get("/stock/movimientos", async (req, res) => {
