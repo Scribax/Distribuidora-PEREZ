@@ -6255,9 +6255,22 @@ textarea {
   display: grid;
   grid-template-columns: 1fr;
   align-items: start;
+  min-width: 0;
   min-height: 94px;
+  overflow: hidden;
   padding: 16px 18px;
   border-top: 4px solid var(--line);
+}
+
+.dashboard-metrics-v2 .metric-v2 strong {
+  max-width: 100%;
+  font-size: clamp(16px, 1.25vw, 20px);
+  line-height: 1.12;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  overflow-wrap: normal;
+  word-break: normal;
 }
 
 .dashboard-metrics-v2 .metric-icon {
