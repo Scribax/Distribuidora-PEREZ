@@ -1,7 +1,7 @@
 import ExcelJS from "exceljs";
 import PDFDocument from "pdfkit";
 import { Router } from "express";
-import { endOfMonth, endOfDay, startOfMonth } from "date-fns";
+import { endOfMonth, endOfDay, startOfDay, startOfMonth } from "date-fns";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth, requireRoles } from "../middleware/auth.js";
 import { Rol } from "@prisma/client";
@@ -9,13 +9,19 @@ import { Rol } from "@prisma/client";
 export const reportsRouter = Router();
 reportsRouter.use(requireAuth, requireRoles(Rol.ADMINISTRADOR, Rol.EMPLEADO));
 
-type Column = { header: string; key: string; width?: number };
+type Column = {
+  header: string;
+  key: string;
+  width?: number;
+  align?: "left" | "right";
+  kind?: "text" | "number" | "currency";
+};
 
 function period(req: any) {
   const year = Number(req.query.year ?? new Date().getFullYear());
   const month = Number(req.query.month ?? new Date().getMonth() + 1);
-  const start = req.query.fechaDesde ? new Date(String(req.query.fechaDesde)) : startOfMonth(new Date(year, month - 1, 1));
-  const end = req.query.fechaHasta ? new Date(String(req.query.fechaHasta)) : endOfMonth(new Date(year, month - 1, 1));
+  const start = req.query.fechaDesde ? parseLocalDate(String(req.query.fechaDesde)) : startOfMonth(new Date(year, month - 1, 1));
+  const end = req.query.fechaHasta ? parseLocalDate(String(req.query.fechaHasta), true) : endOfMonth(new Date(year, month - 1, 1));
   return { year, month, start, end };
 }
 
@@ -23,13 +29,47 @@ function money(value: unknown) {
   return Number(value ?? 0);
 }
 
+function parseLocalDate(value: string, end = false) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  const date = match ? new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3])) : new Date(value);
+  return end ? endOfDay(date) : startOfDay(date);
+}
+
+function formatCell(value: unknown, column: Column) {
+  if (value === null || value === undefined || value === "") return "-";
+  if (column.kind === "currency") {
+    return Number(value).toLocaleString("es-AR", { style: "currency", currency: "ARS" });
+  }
+  if (column.kind === "number") {
+    return Number(value).toLocaleString("es-AR");
+  }
+  return String(value);
+}
+
 async function sendReport(res: any, filename: string, title: string, columns: Column[], rows: Record<string, any>[], format: string) {
   if (format === "xlsx") {
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet(title.slice(0, 31));
-    sheet.columns = columns;
+    sheet.columns = columns.map((column) => ({
+      header: column.header,
+      key: column.key,
+      width: column.width ?? 18
+    }));
     sheet.addRows(rows);
     sheet.getRow(1).font = { bold: true };
+    sheet.getRow(1).alignment = { vertical: "middle" };
+    sheet.autoFilter = {
+      from: { row: 1, column: 1 },
+      to: { row: 1, column: columns.length }
+    };
+    columns.forEach((column, index) => {
+      const excelColumn = sheet.getColumn(index + 1);
+      if (column.kind === "currency") excelColumn.numFmt = '"$" #,##0.00;[Red]-"$" #,##0.00';
+      if (column.kind === "number") excelColumn.numFmt = "#,##0";
+      if (column.align === "right" || column.kind === "currency" || column.kind === "number") {
+        excelColumn.alignment = { horizontal: "right" };
+      }
+    });
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     res.setHeader("Content-Disposition", `attachment; filename="${filename}.xlsx"`);
     await workbook.xlsx.write(res);
@@ -41,30 +81,50 @@ async function sendReport(res: any, filename: string, title: string, columns: Co
   res.setHeader("Content-Disposition", `attachment; filename="${filename}.pdf"`);
   const doc = new PDFDocument({ margin: 42, size: "A4", layout: "landscape" });
   doc.pipe(res);
-  doc.fontSize(16).text(title);
-  doc.moveDown();
-  const tableWidth = doc.page.width - 84;
-  const colWidth = tableWidth / columns.length;
-  let y = doc.y;
-  doc.fontSize(8).fillColor("#555555");
-  columns.forEach((col, index) => doc.text(col.header, 42 + index * colWidth, y, { width: colWidth - 6 }));
-  y += 18;
-  doc.moveTo(42, y - 4).lineTo(doc.page.width - 42, y - 4).strokeColor("#dddddd").stroke();
-  doc.fillColor("#111111");
+  const left = 42;
+  const tableWidth = doc.page.width - left * 2;
+  const totalWidth = columns.reduce((sum, col) => sum + (col.width ?? 18), 0);
+  const colWidths = columns.map((col) => ((col.width ?? 18) / totalWidth) * tableWidth);
+  const colX = columns.reduce<number[]>((positions, _col, index) => {
+    positions.push(index === 0 ? left : positions[index - 1] + colWidths[index - 1]);
+    return positions;
+  }, []);
+
+  const drawHeader = () => {
+    doc.fontSize(16).fillColor("#111111").text(title, left, 42);
+    const headerY = doc.y + 16;
+    doc.fontSize(8).fillColor("#555555");
+    columns.forEach((col, index) => {
+      doc.text(col.header, colX[index], headerY, { width: colWidths[index] - 6, align: col.align ?? "left" });
+    });
+    doc.moveTo(left, headerY + 14).lineTo(doc.page.width - left, headerY + 14).strokeColor("#dddddd").stroke();
+    doc.fillColor("#111111");
+    return headerY + 22;
+  };
+
+  let y = drawHeader();
   for (const row of rows) {
-    if (y > doc.page.height - 60) {
+    doc.fontSize(8);
+    const values = columns.map((col) => formatCell(row[col.key], col));
+    const rowHeight = Math.max(16, ...values.map((value, index) => doc.heightOfString(value, { width: colWidths[index] - 6 }))) + 6;
+    if (y + rowHeight > doc.page.height - 42) {
       doc.addPage();
-      y = 42;
+      y = drawHeader();
     }
-    columns.forEach((col, index) => doc.text(String(row[col.key] ?? "-").slice(0, 45), 42 + index * colWidth, y, { width: colWidth - 6 }));
-    y += 16;
+    columns.forEach((col, index) => {
+      doc.text(values[index], colX[index], y, { width: colWidths[index] - 6, align: col.align ?? "left" });
+    });
+    y += rowHeight;
   }
   doc.end();
 }
 
 reportsRouter.get("/clientes", async (req, res) => {
   const format = String(req.query.format ?? "pdf");
-  const clients = await prisma.cliente.findMany({ orderBy: { nombre: "asc" } });
+  const clients = await prisma.cliente.findMany({
+    where: { saldoPendiente: { gt: 0 } },
+    orderBy: { nombre: "asc" }
+  });
   const rows = clients.map((client) => ({
     nombre: client.nombre,
     empresa: client.empresa ?? "",
@@ -73,12 +133,12 @@ reportsRouter.get("/clientes", async (req, res) => {
     saldo: money(client.saldoPendiente),
     estado: client.activo ? "Activo" : "Inactivo"
   }));
-  await sendReport(res, "clientes-saldos", "Clientes con saldos", [
+  await sendReport(res, "clientes-saldo-pendiente", "Clientes con saldo pendiente", [
     { header: "Cliente", key: "nombre", width: 28 },
     { header: "Empresa", key: "empresa", width: 24 },
     { header: "Teléfono", key: "telefono", width: 18 },
     { header: "Email", key: "email", width: 28 },
-    { header: "Saldo", key: "saldo", width: 14 },
+    { header: "Saldo", key: "saldo", width: 14, align: "right", kind: "currency" },
     { header: "Estado", key: "estado", width: 14 }
   ], rows, format);
 });
@@ -118,13 +178,13 @@ reportsRouter.get("/ventas", async (req, res) => {
     { header: "Fecha", key: "fecha", width: 14 },
     { header: "Cliente", key: "cliente", width: 28 },
     { header: "Vendedor", key: "vendedor", width: 22 },
-    { header: "Total", key: "total", width: 14 },
-    { header: "Pagado", key: "pagado", width: 14 },
+    { header: "Total", key: "total", width: 14, align: "right", kind: "currency" },
+    { header: "Pagado", key: "pagado", width: 14, align: "right", kind: "currency" },
     { header: "Pago", key: "pago", width: 14 },
     { header: "Método", key: "metodo", width: 16 },
-    { header: "Costo vendido", key: "costoVendido", width: 16 },
-    { header: "Ganancia", key: "ganancia", width: 16 },
-    { header: "Comisión", key: "comision", width: 14 },
+    { header: "Costo vendido", key: "costoVendido", width: 16, align: "right", kind: "currency" },
+    { header: "Ganancia", key: "ganancia", width: 16, align: "right", kind: "currency" },
+    { header: "Comisión", key: "comision", width: 14, align: "right", kind: "currency" },
     { header: "Estado", key: "estado", width: 14 }
   ], rows, format);
 });
@@ -146,7 +206,7 @@ reportsRouter.get("/gastos", async (req, res) => {
     { header: "Fecha", key: "fecha", width: 14 },
     { header: "Categoría", key: "categoria", width: 18 },
     { header: "Descripción", key: "descripcion", width: 34 },
-    { header: "Monto", key: "monto", width: 14 },
+    { header: "Monto", key: "monto", width: 14, align: "right", kind: "currency" },
     { header: "Método", key: "metodo", width: 16 },
     { header: "Comprobante", key: "comprobante", width: 18 },
     { header: "Usuario", key: "usuario", width: 18 }
@@ -167,8 +227,8 @@ reportsRouter.get("/compras", async (req, res) => {
   await sendReport(res, "compras", "Compras", [
     { header: "Proveedor", key: "proveedor", width: 30 },
     { header: "Fecha", key: "fecha", width: 16 },
-    { header: "Total", key: "total", width: 16 },
-    { header: "Ítems", key: "items", width: 12 },
+    { header: "Total", key: "total", width: 16, align: "right", kind: "currency" },
+    { header: "Ítems", key: "items", width: 12, align: "right", kind: "number" },
     { header: "Estado", key: "estado", width: 16 }
   ], rows, format);
 });
@@ -191,11 +251,11 @@ reportsRouter.get("/productos", async (req, res) => {
     { header: "Código", key: "codigo", width: 14 },
     { header: "Producto", key: "producto", width: 32 },
     { header: "Categoría", key: "categoria", width: 22 },
-    { header: "Stock", key: "stock", width: 10 },
-    { header: "Mínimo", key: "minimo", width: 10 },
-    { header: "Costo", key: "costo", width: 14 },
-    { header: "Mayorista", key: "mayorista", width: 14 },
-    { header: "Minorista", key: "minorista", width: 14 },
+    { header: "Stock", key: "stock", width: 10, align: "right", kind: "number" },
+    { header: "Mínimo", key: "minimo", width: 10, align: "right", kind: "number" },
+    { header: "Costo", key: "costo", width: 14, align: "right", kind: "currency" },
+    { header: "Mayorista", key: "mayorista", width: 14, align: "right", kind: "currency" },
+    { header: "Minorista", key: "minorista", width: 14, align: "right", kind: "currency" },
     { header: "Estado", key: "estado", width: 14 }
   ], rows, format);
 });
@@ -206,8 +266,8 @@ reportsRouter.get("/auditoria", async (req, res) => {
   const accion = String(req.query.accion ?? "");
   const usuarioId = String(req.query.usuarioId ?? "");
   const entidad = String(req.query.entidad ?? "");
-  const fechaDesde = req.query.fechaDesde ? new Date(String(req.query.fechaDesde)) : undefined;
-  const fechaHasta = req.query.fechaHasta ? endOfDay(new Date(String(req.query.fechaHasta))) : undefined;
+  const fechaDesde = req.query.fechaDesde ? parseLocalDate(String(req.query.fechaDesde)) : undefined;
+  const fechaHasta = req.query.fechaHasta ? parseLocalDate(String(req.query.fechaHasta), true) : undefined;
   const where = {
     modulo: modulo || undefined,
     accion: accion || undefined,

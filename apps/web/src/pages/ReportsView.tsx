@@ -28,12 +28,12 @@ export function ReportsView({ api }: { api: ReturnType<typeof useApi> }) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `${kind}.${format}`;
+    a.download = reportFilename(kind, format, year, month);
     a.click();
     window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
   }
   const reportRows = [
-    ["clientes", "Clientes con saldos"],
+    ["clientes", "Clientes con saldo pendiente"],
     ["ventas", "Ventas del período"],
     ["compras", "Compras del período"],
     ["gastos", "Gastos del período"],
@@ -77,6 +77,19 @@ export function ReportsView({ api }: { api: ReturnType<typeof useApi> }) {
       <div className="audit-list">{auditRows.map((row) => <AuditRow row={row} key={row.id} />)}{!auditRows.length && <p className="muted">No hay movimientos con estos filtros.</p>}</div>
     </section>
   </div>;
+}
+
+function reportFilename(kind: string, format: "pdf" | "xlsx", year: number, month: number) {
+  const names: Record<string, string> = {
+    clientes: "clientes-saldo-pendiente",
+    ventas: "ventas",
+    compras: "compras",
+    gastos: "gastos",
+    productos: "productos-stock"
+  };
+  const base = names[kind] ?? kind;
+  const usesPeriod = new Set(["ventas", "compras", "gastos"]).has(kind);
+  return `${base}${usesPeriod ? `-${year}-${String(month).padStart(2, "0")}` : ""}.${format}`;
 }
 
 function auditActionLabel(action: string) {
