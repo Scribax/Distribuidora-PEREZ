@@ -30,9 +30,9 @@ export function RemittancesView({ api, canWrite, isAdmin }: { api: ReturnType<ty
   const [editSaved, setEditSaved] = useState(false);
   const load = (next = filters, nextPage = page): Promise<void> => Promise.all([
     api(`/remitos?${qs({ ...next, page: nextPage, pageSize: REMITOS_PAGE_SIZE })}`),
-    api("/productos?estado=ACTIVO&pageSize=100"),
-    api("/clientes?pageSize=100"),
-    api("/vendedores?pageSize=100")
+    api("/productos?estado=ACTIVO&pageSize=1000"),
+    api("/clientes?pageSize=1000"),
+    api("/vendedores?pageSize=1000")
   ]).then(([r, p, c, v]) => {
     const resultTotal = r.total ?? r.items.length;
     if (!r.items.length && resultTotal > 0 && nextPage > 1) return load(next, nextPage - 1);

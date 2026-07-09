@@ -18,8 +18,8 @@ export function PurchasesView({ api, canWrite, isAdmin }: { api: ReturnType<type
   const [error, setError] = useState("");
   const load = (next = filters) => Promise.all([
     api(`/compras?${qs({ ...next, pageSize: 100 })}`),
-    api("/productos?estado=ACTIVO&pageSize=100"),
-    api("/proveedores?pageSize=100")
+    api("/productos?estado=ACTIVO&pageSize=1000"),
+    api("/proveedores?pageSize=1000")
   ]).then(([c, p, s]) => { setItems(c.items); setProducts(p.items); setSuppliers(s.items); });
   useEffect(() => { load(); }, []);
   async function openPurchase(row: any) {
