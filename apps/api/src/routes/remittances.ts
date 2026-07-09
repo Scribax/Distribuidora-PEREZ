@@ -375,50 +375,79 @@ remittancesRouter.get("/:id/pdf", async (req, res) => {
   const left = doc.page.margins.left;
   const right = left + pageWidth;
 
-  doc.image(brandLogoPath, left, 22, { width: 118 });
-  doc.fontSize(17).fillColor("#111111").text(`Boleta Nro. ${remito.numero}`, right - 190, 29, { width: 190, align: "right" });
-  doc.fontSize(9).fillColor("#555555").text(`Fecha: ${remito.fecha.toISOString().slice(0, 10)}`, right - 190, 53, { width: 190, align: "right" });
-  doc.text(`Estado: ${remito.estado === "ACTIVO" ? "Activo" : "Cancelado"}`, right - 190, 67, { width: 190, align: "right" });
-  doc.moveTo(left, 91).lineTo(right, 91).strokeColor("#166534").lineWidth(1.2).stroke();
-
-  doc.roundedRect(left, 106, pageWidth, 62, 4).strokeColor("#d9e2dd").lineWidth(0.8).stroke();
-  doc.fontSize(9.5).fillColor("#111111").text("Cliente", left + 10, 117, { width: 80 });
-  doc.fontSize(10.5).text(remito.cliente.nombre, left + 70, 116, { width: 210 });
-  doc.fontSize(9.5).fillColor("#555555").text(`Dirección: ${remito.cliente.direccion ?? "-"}`, left + 70, 134, { width: 210 });
-  doc.fillColor("#111111").text("Vendedor", left + 310, 117, { width: 70 });
-  doc.fontSize(10.5).text(remito.vendedor?.nombre ?? "-", left + 382, 116, { width: 130 });
-  doc.fontSize(9.5).fillColor("#555555").text(`Pago: ${remito.pagoEstado}${remito.metodoPago ? ` · ${remito.metodoPago}` : ""}`, left + 382, 134, { width: 140 });
-
-  doc.roundedRect(left, 176, pageWidth, 28, 4).fillAndStroke("#f7fbf8", "#d9e2dd");
-  doc.fillColor("#496054").fontSize(8).text("SALDO DE SU CTA CTE A LA FECHA", left + 10, 184, { width: 230 });
-  doc.fillColor("#166534").fontSize(13).text(money(saldoCuentaCorriente), right - 170, 182, { width: 160, align: "right" });
-
   const startX = left;
-  let y = 222;
-  doc.rect(startX, y - 5, pageWidth, 18).fillAndStroke("#f5f1e8", "#d9e2dd");
-  doc.fontSize(8.3).fillColor("#496054");
-  doc.text("Código", startX + 6, y, { width: 64 });
-  doc.text("Producto", startX + 78, y, { width: 220 });
-  doc.text("Cant.", startX + 308, y, { width: 42, align: "right" });
-  doc.text("Unit.", startX + 365, y, { width: 76, align: "right" });
-  doc.text("Subtotal", startX + 456, y, { width: 76, align: "right" });
-  y += 21;
-  doc.fillColor("#111111").fontSize(8.5);
+  const bottomLimit = doc.page.height - 58;
+  const drawItemsHeader = (headerY: number) => {
+    doc.rect(startX, headerY - 5, pageWidth, 18).fillAndStroke("#f5f1e8", "#d9e2dd");
+    doc.fontSize(8.3).fillColor("#496054");
+    doc.text("Código", startX + 6, headerY, { width: 64 });
+    doc.text("Producto", startX + 78, headerY, { width: 220 });
+    doc.text("Cant.", startX + 308, headerY, { width: 42, align: "right" });
+    doc.text("Unit.", startX + 365, headerY, { width: 76, align: "right" });
+    doc.text("Subtotal", startX + 456, headerY, { width: 76, align: "right" });
+    return headerY + 21;
+  };
+  const drawFooter = () => {
+    const footerY = doc.page.height - 38;
+    doc.moveTo(left, footerY - 12).lineTo(right, footerY - 12).dash(3, { space: 4 }).strokeColor("#b9c7bf").stroke().undash();
+    doc.fillColor("#777777").fontSize(7).text("Documento interno sin validez fiscal.", left, footerY, { align: "center", width: pageWidth, lineBreak: false });
+  };
+  const drawMainHeader = () => {
+    doc.image(brandLogoPath, left, 22, { width: 118 });
+    doc.fontSize(17).fillColor("#111111").text(`Boleta Nro. ${remito.numero}`, right - 190, 29, { width: 190, align: "right" });
+    doc.fontSize(9).fillColor("#555555").text(`Fecha: ${remito.fecha.toISOString().slice(0, 10)}`, right - 190, 53, { width: 190, align: "right" });
+    doc.text(`Estado: ${remito.estado === "ACTIVO" ? "Activo" : "Cancelado"}`, right - 190, 67, { width: 190, align: "right" });
+    doc.moveTo(left, 91).lineTo(right, 91).strokeColor("#166534").lineWidth(1.2).stroke();
+
+    doc.roundedRect(left, 106, pageWidth, 62, 4).strokeColor("#d9e2dd").lineWidth(0.8).stroke();
+    doc.fontSize(9.5).fillColor("#111111").text("Cliente", left + 10, 117, { width: 80 });
+    doc.fontSize(10.5).text(remito.cliente.nombre, left + 70, 116, { width: 210 });
+    doc.fontSize(9.5).fillColor("#555555").text(`Dirección: ${remito.cliente.direccion ?? "-"}`, left + 70, 134, { width: 210 });
+    doc.fillColor("#111111").text("Vendedor", left + 310, 117, { width: 70 });
+    doc.fontSize(10.5).text(remito.vendedor?.nombre ?? "-", left + 382, 116, { width: 130 });
+    doc.fontSize(9.5).fillColor("#555555").text(`Pago: ${remito.pagoEstado}${remito.metodoPago ? ` · ${remito.metodoPago}` : ""}`, left + 382, 134, { width: 140 });
+
+    doc.roundedRect(left, 176, pageWidth, 28, 4).fillAndStroke("#f7fbf8", "#d9e2dd");
+    doc.fillColor("#496054").fontSize(8).text("SALDO DE SU CTA CTE A LA FECHA", left + 10, 184, { width: 230 });
+    doc.fillColor("#166534").fontSize(13).text(money(saldoCuentaCorriente), right - 170, 182, { width: 160, align: "right" });
+    return drawItemsHeader(222);
+  };
+  const drawContinuationHeader = () => {
+    doc.fontSize(14).fillColor("#111111").text(`Boleta Nro. ${remito.numero}`, left, 32, { width: 220 });
+    doc.fontSize(9).fillColor("#555555").text(`${remito.cliente.nombre} · continuación`, left, 52, { width: pageWidth });
+    doc.moveTo(left, 72).lineTo(right, 72).strokeColor("#166534").lineWidth(1.2).stroke();
+    return drawItemsHeader(92);
+  };
+
+  let y = drawMainHeader();
   for (const item of remito.items) {
-    if (y > 326) {
-      doc.fillColor("#777777").fontSize(8).text("Continúa en la siguiente boleta.", startX, y + 4, { width: pageWidth });
-      break;
+    doc.fontSize(8.5);
+    const productHeight = doc.heightOfString(item.nombreProducto, { width: 220 });
+    const rowHeight = Math.max(18, productHeight + 6);
+    if (y + rowHeight > bottomLimit - 92) {
+      drawFooter();
+      doc.addPage();
+      y = drawContinuationHeader();
     }
     doc.moveTo(startX, y - 4).lineTo(startX + pageWidth, y - 4).strokeColor("#edf1ee").stroke();
+    doc.fillColor("#111111").fontSize(8.5);
     doc.text(item.codigoProducto, startX + 6, y, { width: 64 });
     doc.text(item.nombreProducto, startX + 78, y, { width: 220 });
     doc.text(String(item.cantidad), startX + 308, y, { width: 42, align: "right" });
     doc.text(money(item.precioUnitario), startX + 365, y, { width: 76, align: "right" });
     doc.text(money(item.subtotal), startX + 456, y, { width: 76, align: "right" });
-    y += 18;
+    y += rowHeight;
   }
   doc.moveTo(startX, y).lineTo(startX + pageWidth, y).strokeColor("#d9e2dd").stroke();
-  const totalsY = Math.min(y + 10, 334);
+  if (y + 92 > bottomLimit) {
+    drawFooter();
+    doc.addPage();
+    y = 82;
+    doc.fontSize(14).fillColor("#111111").text(`Boleta Nro. ${remito.numero}`, left, 32, { width: 220 });
+    doc.fontSize(9).fillColor("#555555").text(`${remito.cliente.nombre} · resumen`, left, 52, { width: pageWidth });
+    doc.moveTo(left, 72).lineTo(right, 72).strokeColor("#166534").lineWidth(1.2).stroke();
+  }
+  const totalsY = y + 10;
   doc.roundedRect(right - 218, totalsY, 218, 72, 4).fillAndStroke("#fffefa", "#d9e2dd");
   doc.fontSize(8.8).fillColor("#555555").text("Subtotal", right - 205, totalsY + 10, { width: 90 });
   doc.fillColor("#111111").text(money(remito.subtotal), right - 105, totalsY + 10, { width: 92, align: "right" });
@@ -427,7 +456,6 @@ remittancesRouter.get("/:id/pdf", async (req, res) => {
   doc.moveTo(right - 205, totalsY + 45).lineTo(right - 12, totalsY + 45).strokeColor("#d9e2dd").stroke();
   doc.fontSize(14).fillColor("#166534").text("Total", right - 205, totalsY + 51, { width: 70 });
   doc.text(money(remito.total), right - 120, totalsY + 51, { width: 108, align: "right" });
-  doc.moveTo(left, 404).lineTo(right, 404).dash(3, { space: 4 }).strokeColor("#b9c7bf").stroke().undash();
-  doc.fillColor("#777777").fontSize(7).text("Documento interno sin validez fiscal.", left, 382, { align: "center", width: pageWidth, lineBreak: false });
+  drawFooter();
   doc.end();
 });
