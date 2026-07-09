@@ -30,7 +30,8 @@ export function useApi(session: Session | null, setSession: (s: Session | null) 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ refreshToken: session.refreshToken })
       });
-      if (!refreshed.ok) return null;
+      if (refreshed.status === 401 || refreshed.status === 403) return null;
+      if (!refreshed.ok) throw await parseError(refreshed);
       const data = await refreshed.json();
       // El endpoint puede devolver la sesión completa o solo tokens: fusionamos
       // sobre la sesión actual para no perder `user`/`refreshToken`.
