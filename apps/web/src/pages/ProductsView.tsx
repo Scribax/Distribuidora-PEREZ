@@ -6,19 +6,30 @@ import { confirmAction, dateInput, expenseLabel, formatDate, formatMovementRow, 
 import { Metric, Row, Table, SearchBox } from "../components/ui";
 import { EntityPicker, ItemList, ProductPicker } from "../components/pickers";
 
+const PRODUCTS_PAGE_SIZE = 25;
+
 export function ProductsView({ api, canWrite, isAdmin }: { api: ReturnType<typeof useApi>; canWrite: boolean; isAdmin: boolean }) {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [page, setPage] = useState(1);
+  const [totalProducts, setTotalProducts] = useState(0);
   const [q, setQ] = useState("");
   const [estado, setEstado] = useState("ACTIVO");
   const [categoriaId, setCategoriaId] = useState("");
   const [error, setError] = useState("");
-  const load = (term = q, nextEstado = estado, nextCategoria = categoriaId) => Promise.all([
-    api(`/productos?${qs({ q: term.trim(), estado: nextEstado, categoriaId: nextCategoria, pageSize: 1000 })}`),
+  const load = (term = q, nextEstado = estado, nextCategoria = categoriaId, nextPage = page): Promise<void> => Promise.all([
+    api(`/productos?${qs({ q: term.trim(), estado: nextEstado, categoriaId: nextCategoria, page: nextPage, pageSize: PRODUCTS_PAGE_SIZE })}`),
     api("/categorias")
-  ]).then(([p, c]) => { setProducts(p.items); setCategories(c); });
-  useEffect(() => { load(q, "ACTIVO", categoriaId); }, []);
+  ]).then(([p, c]) => {
+    const resultTotal = p.total ?? p.items.length;
+    if (!p.items.length && resultTotal > 0 && nextPage > 1) return load(term, nextEstado, nextCategoria, nextPage - 1);
+    setProducts(p.items);
+    setTotalProducts(resultTotal);
+    setPage(p.page ?? nextPage);
+    setCategories(c);
+  });
+  useEffect(() => { load(q, "ACTIVO", categoriaId, 1); }, []);
   async function refreshSelected(id?: string) {
     if (id) setSelectedProduct(await api(`/productos/${id}`));
   }
@@ -27,13 +38,15 @@ export function ProductsView({ api, canWrite, isAdmin }: { api: ReturnType<typeo
   }
   function filterProducts(event?: React.FormEvent) {
     event?.preventDefault();
-    load(q, estado, categoriaId);
+    setPage(1);
+    load(q, estado, categoriaId, 1);
   }
   function clearFilter() {
     setQ("");
     setEstado("ACTIVO");
     setCategoriaId("");
-    load("", "ACTIVO", "");
+    setPage(1);
+    load("", "ACTIVO", "", 1);
   }
   async function create(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -43,7 +56,7 @@ export function ProductsView({ api, canWrite, isAdmin }: { api: ReturnType<typeo
     try {
       await api("/productos", { method: "POST", body: JSON.stringify(productBody(form)) });
       formEl.reset();
-      await load();
+      await load(q, estado, categoriaId, 1);
     } catch (err: any) {
       setError(err.message ?? "No se pudo crear el producto");
     }
@@ -55,7 +68,7 @@ export function ProductsView({ api, canWrite, isAdmin }: { api: ReturnType<typeo
     setError("");
     try {
       await api(`/productos/${selectedProduct.id}`, { method: "PATCH", body: JSON.stringify({ ...productBody(form), activo: form.activo === "true" }) });
-      await load();
+      await load(q, estado, categoriaId, page);
       await refreshSelected(selectedProduct.id);
     } catch (err: any) {
       setError(err.message ?? "No se pudo actualizar el producto");
@@ -67,7 +80,7 @@ export function ProductsView({ api, canWrite, isAdmin }: { api: ReturnType<typeo
     try {
       await api(`/productos/${product.id}`, { method: "DELETE" });
       if (selectedProduct?.id === product.id) setSelectedProduct(null);
-      await load();
+      await load(q, estado, categoriaId, page);
     } catch (err: any) {
       setError(err.message ?? "No se pudo eliminar el producto");
     }
@@ -79,7 +92,7 @@ export function ProductsView({ api, canWrite, isAdmin }: { api: ReturnType<typeo
     try {
       await api("/categorias", { method: "POST", body: JSON.stringify(payload(formEl)) });
       formEl.reset();
-      await load();
+      await load(q, estado, categoriaId, page);
     } catch (err: any) {
       setError(err.message ?? "No se pudo crear la categoría");
     }
@@ -90,7 +103,7 @@ export function ProductsView({ api, canWrite, isAdmin }: { api: ReturnType<typeo
     if (!form.categoriaId) return;
     try {
       await api(`/categorias/${form.categoriaId}`, { method: "PATCH", body: JSON.stringify({ nombre: form.nombre, activo: form.activo === "true" }) });
-      await load();
+      await load(q, estado, categoriaId, page);
     } catch (err: any) {
       setError(err.message ?? "No se pudo actualizar la categoría");
     }
@@ -109,7 +122,7 @@ export function ProductsView({ api, canWrite, isAdmin }: { api: ReturnType<typeo
           aplicarMinorista: form.aplicarMinorista === "on"
         })
       });
-      await load();
+      await load(q, estado, categoriaId, page);
       alert(`Precios actualizados: ${result.actualizados}`);
     } catch (err: any) {
       setError(err.message ?? "No se pudo aplicar el aumento");
@@ -118,17 +131,25 @@ export function ProductsView({ api, canWrite, isAdmin }: { api: ReturnType<typeo
   const activeCount = products.filter((p) => p.activo).length;
   const lowStockCount = products.filter((p) => p.activo && p.stockActual <= p.stockMinimo).length;
   const stockValue = products.reduce((total, product) => total + Number(product.costo) * product.stockActual, 0);
+  const totalPages = Math.max(1, Math.ceil(totalProducts / PRODUCTS_PAGE_SIZE));
+  const firstVisible = totalProducts === 0 ? 0 : (page - 1) * PRODUCTS_PAGE_SIZE + 1;
+  const lastVisible = Math.min(page * PRODUCTS_PAGE_SIZE, totalProducts);
+  const goToPage = (nextPage: number) => {
+    const safePage = Math.min(Math.max(nextPage, 1), totalPages);
+    setPage(safePage);
+    load(q, estado, categoriaId, safePage);
+  };
   return <div className="products-page">
     <section className="products-hero">
       <div>
         <h2>Catálogo</h2>
-        <span>{products.length} productos encontrados</span>
+        <span>{totalProducts} productos encontrados</span>
       </div>
       <div className="products-kpis">
-        <Metric label="Activos" value={String(activeCount)} />
-        <Metric label="Inactivos" value={String(products.length - activeCount)} />
-        <Metric label="Stock bajo" value={String(lowStockCount)} />
-        <Metric label="Valor stock" value={money(stockValue)} />
+        <Metric label="En página" value={String(products.length)} />
+        <Metric label="Activos visibles" value={String(activeCount)} />
+        <Metric label="Stock bajo visible" value={String(lowStockCount)} />
+        <Metric label="Valor visible" value={money(stockValue)} />
       </div>
     </section>
     <div className="products-layout">
@@ -139,6 +160,14 @@ export function ProductsView({ api, canWrite, isAdmin }: { api: ReturnType<typeo
           <select value={categoriaId} onChange={(e) => setCategoriaId(e.target.value)}><option value="">Todas las categorías</option>{categories.map((c) => <option value={c.id} key={c.id}>{c.nombre}</option>)}</select>
           <button>Filtrar</button><button type="button" className="secondary" onClick={clearFilter}>Limpiar</button>
         </form>
+        <div className="products-list-toolbar">
+          <span>{firstVisible}-{lastVisible} de {totalProducts} productos</span>
+          <div className="pager compact-pager">
+            <button type="button" className="secondary" onClick={() => goToPage(page - 1)} disabled={page === 1}>Anterior</button>
+            <span>Página {page} de {totalPages}</span>
+            <button type="button" className="secondary" onClick={() => goToPage(page + 1)} disabled={page === totalPages}>Siguiente</button>
+          </div>
+        </div>
         <div className="products-list">
           {products.map((product) => <ProductCard key={product.id} product={product} selected={selectedProduct?.id === product.id} isAdmin={isAdmin} onOpen={openProduct} onDelete={deleteProduct} />)}
           {!products.length && <p className="muted">No hay productos con estos filtros.</p>}

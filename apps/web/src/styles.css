@@ -4815,6 +4815,15 @@ tr:hover td {
 .stock-filter-bar button {
   min-width: 96px;
 }
+.products-list-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+}
 .products-list,
 .stock-product-list {
   display: grid;
@@ -6695,6 +6704,7 @@ body:has(.modal-backdrop) {
   .audit-toolbar,
   .client-list-toolbar,
   .sales-list-toolbar,
+  .products-list-toolbar,
   .products-toolbar,
   .stock-toolbar,
   .filters,
@@ -6730,6 +6740,7 @@ body:has(.modal-backdrop) {
   .workspace-header,
   .client-list-toolbar,
   .sales-list-toolbar,
+  .products-list-toolbar,
   .audit-toolbar,
   .stock-movement-head {
     display: grid;
@@ -6741,6 +6752,7 @@ body:has(.modal-backdrop) {
   .workspace-header > *,
   .client-list-toolbar > *,
   .sales-list-toolbar > *,
+  .products-list-toolbar > *,
   .audit-toolbar > * {
     min-width: 0;
   }
