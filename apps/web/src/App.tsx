@@ -67,7 +67,7 @@ export default function App() {
     <button type="button" className="mobile-menu-button" onClick={() => setNavOpen(true)} title="Abrir menú"><Menu size={20} />Menú</button>
     {navOpen && <button type="button" className="nav-scrim" onClick={() => setNavOpen(false)} aria-label="Cerrar menú" />}
     <aside className={navOpen ? "open" : ""}>
-      <div className="brand"><img src="/brand-logo.png" alt="Perez Martin Distribuidora" /><button type="button" className="nav-close" onClick={() => setNavOpen(false)} title="Cerrar menú"><X size={18} /></button></div>
+      <div className="brand"><img src="/brand-logo-optimized.png" alt="Perez Martin Distribuidora" /><button type="button" className="nav-close" onClick={() => setNavOpen(false)} title="Cerrar menú"><X size={18} /></button></div>
       {nav.map(([id, Icon, label]) => <button key={id} className={view === id ? "active" : ""} onClick={() => { setView(id); setNavOpen(false); }} title={label}><Icon size={18} />{label}</button>)}
       <button className="theme-toggle" onClick={() => setTheme((current) => current === "dark" ? "light" : "dark")} title={theme === "dark" ? "Modo claro" : "Modo oscuro"}>{theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}{theme === "dark" ? "Claro" : "Oscuro"}</button>
       <InstallButton />

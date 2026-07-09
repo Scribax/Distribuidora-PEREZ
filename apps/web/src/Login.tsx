@@ -33,7 +33,7 @@ export function Login({ onLogin, theme, onToggleTheme }: { onLogin: (session: Se
     <form className="login-panel" onSubmit={submit}>
       <button type="button" className="login-theme-toggle" onClick={onToggleTheme} title={theme === "dark" ? "Modo claro" : "Modo oscuro"}>{theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}{theme === "dark" ? "Claro" : "Oscuro"}</button>
       <div className="login-brand">
-        <img src="/brand-logo.png" alt="Perez Martin Distribuidora" />
+        <img src="/brand-logo-optimized.png" alt="Perez Martin Distribuidora" />
         <strong>Perez Martin</strong>
         <h1>Gestión operativa</h1>
       </div>
