@@ -4764,6 +4764,10 @@ tr:hover td {
   border-radius: 12px;
   border-left: 4px solid var(--brand-red);
 }
+.products-kpis .metric {
+  min-width: 0;
+  overflow: hidden;
+}
 .products-kpis .metric:nth-child(2),
 .stock-kpis .metric:nth-child(2) {
   border-left-color: var(--brand-blue);
@@ -4776,7 +4780,15 @@ tr:hover td {
 .stock-kpis .metric:nth-child(4) {
   border-left-color: var(--success);
 }
-.products-kpis .metric strong,
+.products-kpis .metric strong {
+  margin-top: 8px;
+  max-width: 100%;
+  font-size: clamp(16px, 1.25vw, 20px);
+  line-height: 1.12;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .stock-kpis .metric strong {
   margin-top: 8px;
   font-size: clamp(18px, 1.6vw, 23px);
