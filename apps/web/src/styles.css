@@ -3837,6 +3837,52 @@ aside .logout:hover {
   color: var(--text);
   box-shadow: 0 1px 2px var(--shadow);
 }
+.workspace-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+}
+.maintenance-pill {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  max-width: 320px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted);
+  box-shadow: 0 1px 2px var(--shadow);
+  white-space: nowrap;
+}
+.maintenance-pill svg {
+  color: var(--brand-blue);
+  flex: 0 0 auto;
+}
+.maintenance-pill span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+.maintenance-pill strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 900;
+  text-overflow: ellipsis;
+}
+.maintenance-pill.soon {
+  border-color: var(--danger-line);
+  background: var(--danger-soft);
+}
+.maintenance-pill.soon svg,
+.maintenance-pill.soon strong {
+  color: var(--danger);
+}
 .panel,
 .metric,
 .client-card,
@@ -6148,9 +6194,22 @@ textarea {
 
   .workspace-header h1,
   .workspace-header p,
+  .workspace-actions,
+  .maintenance-pill,
   .user-pill {
     max-width: 100%;
     overflow-wrap: anywhere;
+  }
+
+  .workspace-actions {
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .maintenance-pill,
+  .user-pill {
+    min-height: 36px;
   }
 
   .mobile-bottom-nav {

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { BarChart3, Boxes, Calculator, LogOut, Menu, Moon, PackagePlus, ReceiptText, ShoppingCart, Sun, UserCog, Users, X } from "lucide-react";
+import { BarChart3, Boxes, Calculator, CalendarClock, LogOut, Menu, Moon, PackagePlus, ReceiptText, ShoppingCart, Sun, UserCog, Users, X } from "lucide-react";
 import { useApi } from "./api";
 import { Login } from "./Login";
 import type { Session } from "./types";
@@ -56,6 +56,7 @@ export default function App() {
     usuarios: "Permisos y cuentas del sistema"
   };
   const currentLabel = nav.find(([id]) => id === view)?.[2] ?? "Dashboard";
+  const maintenance = getMaintenanceStatus();
   const bottomNav = [
     ["dashboard", BarChart3, "Inicio"],
     ["remitos", ReceiptText, "Ventas"],
@@ -78,7 +79,14 @@ export default function App() {
           <h1>{currentLabel}</h1>
           <p>{viewHelp[view]}</p>
         </div>
-        <span className="user-pill">{session.user.nombre} · {session.user.rol}</span>
+        <div className="workspace-actions">
+          <span className={`maintenance-pill ${maintenance.daysLeft <= 3 ? "soon" : ""}`} title={`Próximo mantenimiento: ${maintenance.dueFull}`}>
+            <CalendarClock size={16} />
+            <span>Mantenimiento</span>
+            <strong>{maintenance.shortText}</strong>
+          </span>
+          <span className="user-pill">{session.user.nombre} · {session.user.rol}</span>
+        </div>
       </header>
       {view === "dashboard" && <DashboardView api={api} onNavigate={setView} />}
       {view === "productos" && <ProductsView api={api} canWrite={session.user.rol !== "CONSULTA"} isAdmin={session.user.rol === "ADMINISTRADOR"} />}
@@ -99,4 +107,25 @@ export default function App() {
       </button>)}
     </nav>
   </div>;
+}
+
+function getMaintenanceStatus() {
+  const start = parseLocalDate(import.meta.env.VITE_MAINTENANCE_START_DATE ?? "2026-07-01");
+  const today = new Date();
+  const todayDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  let dueDate = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+  while (dueDate < todayDate) {
+    dueDate = new Date(dueDate.getFullYear(), dueDate.getMonth() + 1, start.getDate());
+  }
+  const daysLeft = Math.round((dueDate.getTime() - todayDate.getTime()) / 86_400_000);
+  const dueShort = dueDate.toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit" });
+  const dueFull = dueDate.toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" });
+  const remaining = daysLeft === 0 ? "vence hoy" : daysLeft === 1 ? "falta 1 día" : `faltan ${daysLeft} días`;
+  return { daysLeft, dueFull, shortText: `${dueShort} · ${remaining}` };
+}
+
+function parseLocalDate(value: string) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return new Date(2026, 6, 1);
+  return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
 }
