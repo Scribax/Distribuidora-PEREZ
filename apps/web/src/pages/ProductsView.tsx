@@ -129,7 +129,7 @@ export function ProductsView({ api, canWrite, isAdmin }: { api: ReturnType<typeo
     }
   }
   const activeCount = products.filter((p) => p.activo).length;
-  const lowStockCount = products.filter((p) => p.activo && p.stockActual <= p.stockMinimo).length;
+  const lowStockCount = products.filter((p) => p.activo && p.stockMinimo > 0 && p.stockActual <= p.stockMinimo).length;
   const stockValue = products.reduce((total, product) => total + Number(product.costo) * product.stockActual, 0);
   const totalPages = Math.max(1, Math.ceil(totalProducts / PRODUCTS_PAGE_SIZE));
   const firstVisible = totalProducts === 0 ? 0 : (page - 1) * PRODUCTS_PAGE_SIZE + 1;
@@ -184,7 +184,7 @@ export function ProductsView({ api, canWrite, isAdmin }: { api: ReturnType<typeo
 }
 
 function ProductCard({ product, selected, isAdmin, onOpen, onDelete }: { product: Product; selected: boolean; isAdmin: boolean; onOpen: (product: Product) => void; onDelete: (product: Product) => void }) {
-  const lowStock = product.activo && product.stockActual <= product.stockMinimo;
+  const lowStock = product.activo && product.stockMinimo > 0 && product.stockActual <= product.stockMinimo;
   return <article className={`product-card ${selected ? "selected" : ""} ${!product.activo ? "inactive" : ""}`}>
     <button type="button" className="product-card-main" onClick={() => onOpen(product)}>
       <div className="product-card-title">

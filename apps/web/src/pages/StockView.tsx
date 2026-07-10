@@ -118,7 +118,7 @@ export function StockView({ api, isAdmin }: { api: ReturnType<typeof useApi>; is
 function StockProductCard({ product, movements, defaultOpen }: { product: Product; movements: any[]; defaultOpen: boolean }) {
   const stockValue = Number(product.costo) * product.stockActual;
   const latest = movements[0];
-  const isLow = product.stockActual <= product.stockMinimo;
+  const isLow = product.stockMinimo > 0 && product.stockActual <= product.stockMinimo;
   const [movementPage, setMovementPage] = useState(1);
   const movementPageSize = 5;
   const totalMovementPages = Math.max(1, Math.ceil(movements.length / movementPageSize));
@@ -163,4 +163,3 @@ function StockMovement({ row }: { row: any }) {
   const date = new Date(row.createdAt).toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" });
   return <div className={`movement ${entrada ? "in" : "out"}`}><div><strong>{row.producto?.nombre ?? "Producto"}</strong><span>{date} · {label}</span></div><div className="movement-numbers"><strong>{entrada ? "Entró" : "Salió"} {Math.abs(row.cantidad)}</strong><span>Quedaron {row.stockResultante}</span></div><small>{row.motivo || referenceLabel(row.referenciaTipo)}</small></div>;
 }
-

@@ -271,7 +271,7 @@ catalogRouter.post("/stock/ajustes", requireRoles(Rol.ADMINISTRADOR), async (req
 catalogRouter.get("/stock/stats", async (req, res) => {
   const [totalProducts, lowStockProducts, stockValueRows] = await Promise.all([
     prisma.producto.count({ where: { activo: true } }),
-    prisma.producto.count({ where: { activo: true, stockActual: { lte: prisma.producto.fields.stockMinimo } } }),
+    prisma.producto.count({ where: { activo: true, stockMinimo: { gt: 0 }, stockActual: { lte: prisma.producto.fields.stockMinimo } } }),
     prisma.producto.findMany({ where: { activo: true }, select: { costo: true, stockActual: true } })
   ]);
   const stockValue = stockValueRows.reduce((sum, p) => sum + Number(p.costo) * p.stockActual, 0);
