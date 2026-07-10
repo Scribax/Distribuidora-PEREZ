@@ -9,4 +9,5 @@ WorkingDirectory=/root/Distribuidora-PEREZ
 Environment=PROJECT_DIR=/root/Distribuidora-PEREZ
 Environment=BACKUP_DIR=/var/backups/perez
 Environment=BACKUP_RETENTION_DAYS=30
+EnvironmentFile=-/etc/perez-backup.env
 ExecStart=/root/Distribuidora-PEREZ/scripts/backup-postgres.sh

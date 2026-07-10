@@ -3,6 +3,9 @@ set -eu
 
 BACKUP_DIR="${BACKUP_DIR:-/var/backups/perez}"
 RETENTION_DAYS="${BACKUP_RETENTION_DAYS:-30}"
+REMOTE_RETENTION_DAYS="${BACKUP_REMOTE_RETENTION_DAYS:-$RETENTION_DAYS}"
+BACKUP_REMOTE="${BACKUP_REMOTE:-}"
+BACKUP_REMOTE_LATEST_NAME="${BACKUP_REMOTE_LATEST_NAME:-latest.sql.gz}"
 SERVICE_NAME="${POSTGRES_SERVICE:-db}"
 DB_NAME="${POSTGRES_DB:-perez_martin}"
 DB_USER="${POSTGRES_USER:-perez}"
@@ -45,5 +48,19 @@ chmod 600 "$FILE"
 ln -sfn "$FILE" "$BACKUP_DIR/latest.sql.gz"
 
 find "$BACKUP_DIR" -name "${DB_NAME}-*.sql.gz" -type f -mtime +"$RETENTION_DAYS" -delete
+
+if [ -n "$BACKUP_REMOTE" ]; then
+  if ! command -v rclone >/dev/null 2>&1; then
+    echo "Backup local creado, pero falta rclone para subir a remoto: $BACKUP_REMOTE" >&2
+    exit 1
+  fi
+
+  BACKUP_REMOTE="${BACKUP_REMOTE%/}"
+  rclone mkdir "$BACKUP_REMOTE"
+  rclone copy "$FILE" "$BACKUP_REMOTE" --transfers 1 --checkers 4
+  rclone copyto "$FILE" "$BACKUP_REMOTE/$BACKUP_REMOTE_LATEST_NAME"
+  rclone delete "$BACKUP_REMOTE" --include "${DB_NAME}-*.sql.gz" --min-age "${REMOTE_RETENTION_DAYS}d"
+  echo "Backup remoto exitoso: $BACKUP_REMOTE"
+fi
 
 echo "Backup exitoso: $FILE"
