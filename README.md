@@ -1,61 +1,109 @@
-# Distribuidora PEREZ
+# 📦 Distribuidora PEREZ - Sistema de Gestión
 
-Sistema privado de gestion para una distribuidora.
+¡Bienvenido al repositorio del Sistema de Gestión Integral para Distribuidora PEREZ! Este proyecto centraliza y optimiza las operaciones internas de la distribuidora.
 
-## Alcance
+## 🚀 Descripción del Proyecto
 
-La aplicacion centraliza operaciones internas como catalogo, stock, clientes, compras, ventas, gastos, balances, informes y auditoria.
+Esta aplicación es un sistema privado diseñado a medida para gestionar las operaciones diarias de una distribuidora. Su objetivo principal es ofrecer una plataforma robusta y centralizada para:
 
-## Stack
+*   **📦 Catálogo y Stock:** Gestión detallada de productos y control de inventario.
+*   **👥 Clientes:** Registro y seguimiento de la cartera de clientes.
+*   **🛒 Compras y Ventas:** Registro de transacciones comerciales.
+*   **💰 Finanzas:** Control de gastos, balances e informes financieros.
+*   **🔒 Auditoría:** Trazabilidad de operaciones críticas.
 
-- React + Vite
-- Node.js + Express
-- PostgreSQL
-- Prisma
-- Docker Compose
-- Nginx
+## 🛠️ Stack Tecnológico
 
-## Configuracion
+El proyecto está construido bajo una arquitectura moderna (monorepo) y contenedorizada:
 
-Este repositorio no documenta credenciales, secretos, URLs productivas ni datos operativos.
+### Frontend (Aplicación Web)
+*   **Framework:** React
+*   **Build Tool:** Vite
 
-Para ejecutar el sistema se requiere configurar variables de entorno locales o de servidor. Usar `.env.example` solo como plantilla de nombres de variables, reemplazando todos los valores por secretos propios.
+### Backend (API REST)
+*   **Entorno:** Node.js
+*   **Framework:** Express
+*   **ORM:** Prisma
 
-## Desarrollo
+### Base de Datos & Infraestructura
+*   **Motor DB:** PostgreSQL
+*   **Contenedores:** Docker & Docker Compose
+*   **Proxy Inverso:** Nginx
 
-```bash
-npm install
-npm run prisma:generate
-npm run dev:api
-npm run dev:web
-```
+---
 
-## Produccion
+## ⚙️ Configuración y Desarrollo Local
 
-El despliegue productivo se realiza con Docker Compose en el servidor configurado para el proyecto.
+> **⚠️ Importante sobre Seguridad:** Este repositorio **NUNCA** debe contener credenciales, secretos, URLs productivas ni datos reales operativos. Asegúrate de que tu `.gitignore` esté bien configurado.
 
-```bash
-docker compose up -d --build
-```
+### Prerrequisitos
+*   Node.js instalado
+*   Docker y Docker Compose instalados
 
-Las migraciones de base de datos deben ejecutarse desde el contenedor de API cuando corresponda.
+### Pasos para levantar el entorno de desarrollo:
 
-## Backups
+1.  **Variables de Entorno:**
+    Copia el archivo de ejemplo para crear tu propio `.env`:
+    ```bash
+    cp .env.example .env
+    ```
+    *Edita el archivo `.env` e ingresa los valores (ej. credenciales de base de datos local).*
 
-El proyecto incluye scripts para generar backups de PostgreSQL y, opcionalmente, copiarlos a un destino externo con `rclone`.
+2.  **Instalación de Dependencias:**
+    Desde la raíz del proyecto (monorepo), ejecuta:
+    ```bash
+    npm install
+    ```
 
-La configuracion real de backups debe mantenerse fuera del repositorio, por ejemplo en archivos del servidor como `/etc/perez-backup.env`.
+3.  **Base de Datos (Prisma):**
+    Genera el cliente de Prisma:
+    ```bash
+    npm run prisma:generate
+    ```
+    *(Si necesitas correr migraciones locales, usa `npm run prisma:migrate`)*
 
-## Seguridad
+4.  **Ejecución:**
+    Levanta la API y la aplicación Web simultáneamente en modo desarrollo:
+    ```bash
+    # En una terminal:
+    npm run dev:api
 
-No subir al repositorio:
+    # En otra terminal:
+    npm run dev:web
+    ```
 
-- archivos `.env`
-- credenciales de usuarios
-- passwords de base de datos
-- secretos JWT
-- tokens de servicios externos
-- claves de Cloudflare, R2, Google Drive u otros proveedores
-- backups de base de datos
+---
 
-Si alguna credencial fue publicada alguna vez, debe considerarse comprometida y rotarse.
+## 🚢 Despliegue en Producción
+
+El sistema está diseñado para desplegarse fácilmente usando contenedores.
+
+1.  Asegúrate de configurar el archivo `.env` de producción en el servidor.
+2.  Ejecuta el build y levanta los servicios en modo *detached* (segundo plano):
+    ```bash
+    docker compose up -d --build
+    ```
+3.  *Nota:* Las migraciones de base de datos en producción deben ejecutarse directamente dentro del contenedor de la API cuando sea necesario.
+
+---
+
+## 💾 Backups
+
+El proyecto incluye scripts automatizados en la carpeta `scripts/` para realizar copias de seguridad de PostgreSQL. Opcionalmente, se pueden sincronizar con almacenamiento externo usando `rclone`.
+
+**Configuración de Backups:**
+Las variables sensibles para los backups (como tokens de nube o credenciales) **deben residir fuera del repositorio**, por ejemplo, en un archivo protegido del servidor como `/etc/perez-backup.env`.
+
+---
+
+## 🛡️ Política de Seguridad
+
+**Regla de Oro:** Si algún secreto se sube por error a GitHub, **debe considerarse comprometido y cambiarse inmediatamente**.
+
+**Archivos estrictamente prohibidos en el repositorio:**
+*   Cualquier archivo `.env` (excepto `.env.example`).
+*   Credenciales de usuarios o passwords de base de datos.
+*   Secretos JWT (`JWT_SECRET`).
+*   Tokens de APIs de terceros.
+*   Claves de proveedores cloud (Cloudflare, R2, AWS, Google Drive, etc.).
+*   Dumps o backups de bases de datos (`.sql`, `.tar`, etc.).
