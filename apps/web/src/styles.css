@@ -4280,6 +4280,17 @@ tr:hover td {
 .sales-filters .picker-trigger {
   min-height: 42px;
 }
+.sales-filters .picker-trigger {
+  align-content: center;
+  overflow: hidden;
+}
+.sales-filters .picker-trigger span {
+  display: block;
+  max-width: 100%;
+}
+.sales-filters .picker-trigger small {
+  display: none;
+}
 .sales-filters button {
   min-width: 96px;
 }
