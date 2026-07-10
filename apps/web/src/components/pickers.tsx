@@ -61,5 +61,12 @@ export function ItemList({ items, mode, onRemove, priceList }: { items: LineItem
 }
 
 export function FilterPanel({ filters, setFilters, products, onSubmit, onClear }: { filters: { proveedor: string; productoId: string; fechaDesde: string; fechaHasta: string }; setFilters: (v: any) => void; products: Product[]; onSubmit: (e: React.FormEvent) => void; onClear: () => void }) {
-  return <form className="filters filters-wide" onSubmit={onSubmit}><input value={filters.proveedor} onChange={(e) => setFilters({ ...filters, proveedor: e.target.value })} placeholder="Proveedor" /><select value={filters.productoId} onChange={(e) => setFilters({ ...filters, productoId: e.target.value })}><option value="">Todos los productos</option>{products.map((p) => <option value={p.id} key={p.id}>{p.nombre}</option>)}</select><input type="date" value={filters.fechaDesde} onChange={(e) => setFilters({ ...filters, fechaDesde: e.target.value })} /><input type="date" value={filters.fechaHasta} onChange={(e) => setFilters({ ...filters, fechaHasta: e.target.value })} /><button>Filtrar</button><button type="button" className="secondary" onClick={onClear}>Limpiar</button></form>;
+  return <form className="filters filters-wide" onSubmit={onSubmit}>
+    <input value={filters.proveedor} onChange={(e) => setFilters({ ...filters, proveedor: e.target.value })} placeholder="Proveedor" />
+    <EntityPicker items={products} value={filters.productoId} onChange={(value) => setFilters({ ...filters, productoId: value })} title="Filtrar producto" placeholder="Todos los productos" searchPlaceholder="Buscar por código, nombre o rubro" getLabel={(product) => product.nombre} getMeta={(product) => `${product.codigoInterno} · stock ${product.stockActual} · ${product.categoria?.nombre ?? "Sin rubro"}`} />
+    <input type="date" value={filters.fechaDesde} onChange={(e) => setFilters({ ...filters, fechaDesde: e.target.value })} />
+    <input type="date" value={filters.fechaHasta} onChange={(e) => setFilters({ ...filters, fechaHasta: e.target.value })} />
+    <button>Filtrar</button>
+    <button type="button" className="secondary" onClick={onClear}>Limpiar</button>
+  </form>;
 }
