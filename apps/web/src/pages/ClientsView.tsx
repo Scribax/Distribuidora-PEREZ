@@ -169,6 +169,11 @@ export function ClientsView({ api, canWrite, canEditBalance }: { api: ReturnType
       window.alert(err.message ?? "No se pudo eliminar el cliente");
     }
   }
+  async function registrarPago(clienteId: string, body: { monto: number; fecha: string; metodoPago: string | null; observaciones: string | null }) {
+    await api(`/clientes/${clienteId}/pagos`, { method: "POST", body: JSON.stringify(body) });
+    await load(q, page);
+    await reloadSelected(clienteId);
+  }
   async function openClientRemitoPdf(remito: any) {
     setError("");
     try {
@@ -230,7 +235,7 @@ export function ClientsView({ api, canWrite, canEditBalance }: { api: ReturnType
         <div className="client-list">{clientRows.map((client) => <button type="button" className={`client-card ${selectedClient?.id === client.id ? "active" : ""}`} key={client.id} onClick={() => openClient(client)}><div><strong>{client.nombre}</strong><span>{client.empresa || "Consumidor final"}</span></div><div><span>Saldo</span><strong>{client.saldoFmt}</strong></div><small>{client.estadoFmt}</small></button>)}{!clientRows.length && <p className="muted">No hay clientes con esa búsqueda.</p>}</div>
       </section>
       {selectedClient && <div className="modal-backdrop client-modal-backdrop" role="dialog" aria-modal="true" aria-label={`Cliente ${selectedClient.nombre}`} onClick={() => setSelectedClient(null)}>
-        <ClientDetail client={selectedClient} canWrite={canWrite} canEditBalance={canEditBalance} onUpdate={updateClient} onDelete={deleteClient} onClose={() => setSelectedClient(null)} onPdf={openClientRemitoPdf} />
+        <ClientDetail client={selectedClient} canWrite={canWrite} canEditBalance={canEditBalance} onUpdate={updateClient} onDelete={deleteClient} onClose={() => setSelectedClient(null)} onPdf={openClientRemitoPdf} onRegistrarPago={registrarPago} />
       </div>}
       {canWrite && <section className="panel import-history-panel">
         <div className="detail-head"><div><h2>Importar historial anterior</h2><span>Subí el PDF anterior del cliente o pegá el texto copiado. Se guarda como historial y no modifica stock.</span></div></div>
@@ -390,9 +395,11 @@ function ClientFields({ client }: { client?: Client }) {
   </>;
 }
 
-function ClientDetail({ client, canWrite, canEditBalance, onUpdate, onDelete, onClose, onPdf }: { client: Client; canWrite: boolean; canEditBalance: boolean; onUpdate: (event: React.FormEvent<HTMLFormElement>) => void; onDelete: (client: Client) => void; onClose: () => void; onPdf: (row: any) => void }) {
+function ClientDetail({ client, canWrite, canEditBalance, onUpdate, onDelete, onClose, onPdf, onRegistrarPago }: { client: Client; canWrite: boolean; canEditBalance: boolean; onUpdate: (event: React.FormEvent<HTMLFormElement>) => void; onDelete: (client: Client) => void; onClose: () => void; onPdf: (row: any) => void; onRegistrarPago: (clienteId: string, body: { monto: number; fecha: string; metodoPago: string | null; observaciones: string | null }) => Promise<void> }) {
   const [editing, setEditing] = useState(false);
+  const [payingOpen, setPayingOpen] = useState(false);
   const remitos = client.remitos ?? [];
+  const pagos = (client as any).pagos ?? [];
   const historialImportado = (client as any).historialImportado ?? [];
   const activeRemitos = remitos.filter((r) => r.estado === "ACTIVO");
   const totalRemitos = activeRemitos.reduce((sum, r) => sum + Number(r.total), 0);
@@ -414,9 +421,11 @@ function ClientDetail({ client, canWrite, canEditBalance, onUpdate, onDelete, on
     </div>
     <div className="client-remittances"><h3>Historial anterior importado</h3><span>Facturas viejas cargadas desde PDF. No descuentan stock ni cuentan como ventas nuevas.</span><div className="historical-list">{historialImportado.map((importacion: any) => <HistoricalImportCard importacion={importacion} key={importacion.id} />)}{!historialImportado.length && <p className="muted">Este cliente no tiene historial anterior importado.</p>}</div></div>
     <div className="client-remittances"><h3>Boletas del cliente</h3><span>Primero aparecen las que tienen saldo pendiente.</span><div className="client-remito-list">{remitoRows.map((row) => <ClientRemitoCard row={row} key={row.id} onPdf={onPdf} />)}{!remitoRows.length && <p className="muted">Este cliente todavía no tiene boletas.</p>}</div></div>
-    {canWrite && <div className="client-edit-box"><button type="button" className="secondary" onClick={() => setEditing(true)}>Editar datos del cliente</button></div>}
+    <div className="client-remittances"><h3>Pagos a cuenta</h3><span>Cobros imputados al saldo general del cliente (no a una boleta puntual). Sirve para saldar deuda histórica o adelantos.</span><div className="client-remito-list">{pagos.map((pago: any) => <article className="client-remito-card" key={pago.id}><div><strong>{money(pago.monto)}</strong><span>{formatDate(pago.fecha)}{pago.metodoPago ? ` · ${String(pago.metodoPago).toLowerCase()}` : ""}</span></div><div><span>Saldo</span><strong>{money(pago.saldoAnterior)} → {money(pago.saldoResultante)}</strong></div>{pago.observaciones && <small>{pago.observaciones}</small>}</article>)}{!pagos.length && <p className="muted">Este cliente todavía no tiene pagos a cuenta registrados.</p>}</div></div>
+    {canWrite && <div className="client-edit-box"><button type="button" onClick={() => setPayingOpen(true)} disabled={Number(client.saldoPendiente) <= 0}>Registrar pago a cuenta</button><button type="button" className="secondary" onClick={() => setEditing(true)}>Editar datos del cliente</button></div>}
     {canEditBalance && <div className="client-danger-zone"><div><strong>Eliminar definitivamente</strong><span>Solo se permite si el cliente no tiene boletas ni historial asociado.</span></div><button type="button" className="danger" onClick={() => onDelete(client)}>Eliminar cliente</button></div>}
     {editing && <ClientEditModal client={client} canEditBalance={canEditBalance} onUpdate={onUpdate} onClose={() => setEditing(false)} />}
+    {payingOpen && <ClientPaymentModal client={client} onClose={() => setPayingOpen(false)} onRegistrarPago={onRegistrarPago} />}
   </section>;
 }
 
@@ -452,6 +461,58 @@ function ClientEditModal({ client, canEditBalance, onUpdate, onClose }: { client
           <button type="button" className="secondary" onClick={onClose}>Cancelar</button>
           <button>Guardar cliente</button>
         </div>
+      </form>
+    </section>
+  </div>;
+}
+
+function ClientPaymentModal({ client, onClose, onRegistrarPago }: { client: Client; onClose: () => void; onRegistrarPago: (clienteId: string, body: { monto: number; fecha: string; metodoPago: string | null; observaciones: string | null }) => Promise<void> }) {
+  const saldo = Number(client.saldoPendiente);
+  const [monto, setMonto] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const montoNum = Number(monto || 0);
+  const saldoResultante = Math.max(saldo - montoNum, 0);
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = payload(event.currentTarget);
+    setError("");
+    if (montoNum <= 0) return setError("Ingresá un monto mayor a 0.");
+    if (montoNum > saldo) return setError(`El pago no puede superar el saldo pendiente (${money(saldo)}).`);
+    setSaving(true);
+    try {
+      await onRegistrarPago(client.id, {
+        monto: montoNum,
+        fecha: String(form.fecha),
+        metodoPago: form.metodoPago ? String(form.metodoPago) : null,
+        observaciones: form.observaciones ? String(form.observaciones) : null
+      });
+      onClose();
+    } catch (err: any) {
+      setError(err.message ?? "No se pudo registrar el pago");
+    } finally {
+      setSaving(false);
+    }
+  }
+  return <div className="modal-backdrop client-edit-backdrop" role="dialog" aria-modal="true" aria-label={`Registrar pago de ${client.nombre}`} onClick={onClose}>
+    <section className="client-edit-modal" onClick={(event) => event.stopPropagation()}>
+      <div className="detail-head">
+        <div><h2>Registrar pago a cuenta</h2><span>{client.nombre} · saldo actual {money(saldo)}</span></div>
+        <button type="button" className="icon-button" onClick={onClose} title="Cerrar"><X size={18} /></button>
+      </div>
+      <form className="form client-edit-form" onSubmit={submit}>
+        <fieldset disabled={saving} style={{ border: "none", padding: 0, margin: 0 }}>
+          <label className="field-label"><span>Monto que entregó</span><input name="monto" type="number" step="0.01" min="0" max={saldo} value={monto} onChange={(e) => setMonto(e.target.value)} placeholder="Ej: 90000" autoFocus required /></label>
+          <label className="field-label"><span>Fecha del pago</span><input name="fecha" type="date" defaultValue={dateInput()} required /></label>
+          <label className="field-label"><span>Método de pago</span><select name="metodoPago" defaultValue=""><option value="">Sin método</option><option value="EFECTIVO">Efectivo</option><option value="TRANSFERENCIA">Transferencia</option><option value="TARJETA">Tarjeta</option><option value="CHEQUE">Cheque</option><option value="OTRO">Otro</option></select></label>
+          <label className="field-label"><span>Observaciones</span><input name="observaciones" placeholder="Ej: pago de deuda anterior" /></label>
+          <p className="muted">Saldo después del pago: <strong>{money(saldoResultante)}</strong></p>
+          {error && <p className="error">{error}</p>}
+          <div className="modal-actions client-edit-actions">
+            <button type="button" className="secondary" onClick={onClose}>Cancelar</button>
+            <button disabled={saving}>{saving ? "Registrando..." : "Registrar pago"}</button>
+          </div>
+        </fieldset>
       </form>
     </section>
   </div>;

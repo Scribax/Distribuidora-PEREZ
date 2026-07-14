@@ -3,6 +3,7 @@ export { ProductsView } from "./ProductsView";
 export { ClientsView } from "./ClientsView";
 export { PurchasesView } from "./PurchasesView";
 export { RemittancesView } from "./RemittancesView";
+export { QuotesView } from "./QuotesView";
 export { StockView } from "./StockView";
 export { ExpensesView } from "./ExpensesView";
 export { BalanceView } from "./BalanceView";

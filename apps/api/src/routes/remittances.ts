@@ -364,7 +364,7 @@ remittancesRouter.get("/:id/pdf", async (req, res) => {
   if (!remito) fail(404, "REMITO_NO_ENCONTRADO", "Remito no encontrado");
 
   res.setHeader("Content-Type", "application/pdf");
-  res.setHeader("Content-Disposition", `inline; filename="boleta-${remito.numero}.pdf"`);
+  res.setHeader("Content-Disposition", `inline; filename="remito-${remito.numero}.pdf"`);
   const doc = new PDFDocument({ size: "A4", margin: 32 });
   doc.pipe(res);
   const money = (value: unknown) => `$${Number(value).toFixed(2)}`;
@@ -378,8 +378,8 @@ remittancesRouter.get("/:id/pdf", async (req, res) => {
   const startX = left;
   const bottomLimit = doc.page.height - 58;
   const drawItemsHeader = (headerY: number) => {
-    doc.rect(startX, headerY - 5, pageWidth, 18).fillAndStroke("#f5f1e8", "#d9e2dd");
-    doc.fontSize(8.3).fillColor("#496054");
+    doc.rect(startX, headerY - 5, pageWidth, 18).fillAndStroke("#f2f2f2", "#cccccc");
+    doc.fontSize(8.3).fillColor("#333333");
     doc.text("Código", startX + 6, headerY, { width: 64 });
     doc.text("Producto", startX + 78, headerY, { width: 220 });
     doc.text("Cant.", startX + 308, headerY, { width: 42, align: "right" });
@@ -394,10 +394,10 @@ remittancesRouter.get("/:id/pdf", async (req, res) => {
   };
   const drawMainHeader = () => {
     doc.image(brandLogoPath, left, 22, { width: 118 });
-    doc.fontSize(17).fillColor("#111111").text(`Boleta Nro. ${remito.numero}`, right - 190, 29, { width: 190, align: "right" });
+    doc.fontSize(17).fillColor("#111111").text(`Remito Nro. ${remito.numero}`, right - 190, 29, { width: 190, align: "right" });
     doc.fontSize(9).fillColor("#555555").text(`Fecha: ${remito.fecha.toISOString().slice(0, 10)}`, right - 190, 53, { width: 190, align: "right" });
     doc.text(`Estado: ${remito.estado === "ACTIVO" ? "Activo" : "Cancelado"}`, right - 190, 67, { width: 190, align: "right" });
-    doc.moveTo(left, 91).lineTo(right, 91).strokeColor("#166534").lineWidth(1.2).stroke();
+    doc.moveTo(left, 91).lineTo(right, 91).strokeColor("#111111").lineWidth(1.2).stroke();
 
     doc.roundedRect(left, 106, pageWidth, 62, 4).strokeColor("#d9e2dd").lineWidth(0.8).stroke();
     doc.fontSize(9.5).fillColor("#111111").text("Cliente", left + 10, 117, { width: 80 });
@@ -407,15 +407,12 @@ remittancesRouter.get("/:id/pdf", async (req, res) => {
     doc.fontSize(10.5).text(remito.vendedor?.nombre ?? "-", left + 382, 116, { width: 130 });
     doc.fontSize(9.5).fillColor("#555555").text(`Pago: ${remito.pagoEstado}${remito.metodoPago ? ` · ${remito.metodoPago}` : ""}`, left + 382, 134, { width: 140 });
 
-    doc.roundedRect(left, 176, pageWidth, 28, 4).fillAndStroke("#f7fbf8", "#d9e2dd");
-    doc.fillColor("#496054").fontSize(8).text("SALDO DE SU CTA CTE A LA FECHA", left + 10, 184, { width: 230 });
-    doc.fillColor("#166534").fontSize(13).text(money(saldoCuentaCorriente), right - 170, 182, { width: 160, align: "right" });
-    return drawItemsHeader(222);
+    return drawItemsHeader(180);
   };
   const drawContinuationHeader = () => {
-    doc.fontSize(14).fillColor("#111111").text(`Boleta Nro. ${remito.numero}`, left, 32, { width: 220 });
+    doc.fontSize(14).fillColor("#111111").text(`Remito Nro. ${remito.numero}`, left, 32, { width: 220 });
     doc.fontSize(9).fillColor("#555555").text(`${remito.cliente.nombre} · continuación`, left, 52, { width: pageWidth });
-    doc.moveTo(left, 72).lineTo(right, 72).strokeColor("#166534").lineWidth(1.2).stroke();
+    doc.moveTo(left, 72).lineTo(right, 72).strokeColor("#111111").lineWidth(1.2).stroke();
     return drawItemsHeader(92);
   };
 
@@ -439,13 +436,13 @@ remittancesRouter.get("/:id/pdf", async (req, res) => {
     y += rowHeight;
   }
   doc.moveTo(startX, y).lineTo(startX + pageWidth, y).strokeColor("#d9e2dd").stroke();
-  if (y + 92 > bottomLimit) {
+  if (y + 130 > bottomLimit) {
     drawFooter();
     doc.addPage();
     y = 82;
-    doc.fontSize(14).fillColor("#111111").text(`Boleta Nro. ${remito.numero}`, left, 32, { width: 220 });
+    doc.fontSize(14).fillColor("#111111").text(`Remito Nro. ${remito.numero}`, left, 32, { width: 220 });
     doc.fontSize(9).fillColor("#555555").text(`${remito.cliente.nombre} · resumen`, left, 52, { width: pageWidth });
-    doc.moveTo(left, 72).lineTo(right, 72).strokeColor("#166534").lineWidth(1.2).stroke();
+    doc.moveTo(left, 72).lineTo(right, 72).strokeColor("#111111").lineWidth(1.2).stroke();
   }
   const totalsY = y + 10;
   doc.roundedRect(right - 218, totalsY, 218, 72, 4).fillAndStroke("#fffefa", "#d9e2dd");
@@ -454,8 +451,10 @@ remittancesRouter.get("/:id/pdf", async (req, res) => {
   doc.fillColor("#555555").text(`Descuento ${Number(remito.descuentoPorcentaje)}%`, right - 205, totalsY + 27, { width: 100 });
   doc.fillColor("#111111").text(`-${money(discountAmount)}`, right - 105, totalsY + 27, { width: 92, align: "right" });
   doc.moveTo(right - 205, totalsY + 45).lineTo(right - 12, totalsY + 45).strokeColor("#d9e2dd").stroke();
-  doc.fontSize(14).fillColor("#166534").text("Total", right - 205, totalsY + 51, { width: 70 });
+  doc.fontSize(14).fillColor("#111111").text("Total", right - 205, totalsY + 51, { width: 70 });
   doc.text(money(remito.total), right - 120, totalsY + 51, { width: 108, align: "right" });
-  drawFooter();
-  doc.end();
-});
+
+  const saldoY = totalsY + 82;
+  doc.roundedRect(left, saldoY, pageWidth, 30, 4).fillAndStroke("#f2f2f2", "#cccccc");
+  doc.fillColor("#333333").fontSize(9).text("SALDO DE SU CTA CTE A LA FECHA", left + 12, saldoY + 10, { width: 260 });
+  doc.fillColor("#111111").fontSize(15).text(money(saldoCuentaCorriente), right - 210, saldoY + 7, { width: 198, align: 

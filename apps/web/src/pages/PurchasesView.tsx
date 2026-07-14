@@ -14,6 +14,8 @@ export function PurchasesView({ api, canWrite, isAdmin }: { api: ReturnType<type
   const [purchaseItems, setPurchaseItems] = useState<LineItem[]>([]);
   const [supplierName, setSupplierName] = useState("");
   const [supplierId, setSupplierId] = useState("");
+  const [builderProductId, setBuilderProductId] = useState("");
+  const [costoUnitario, setCostoUnitario] = useState("");
   const [filters, setFilters] = useState({ proveedor: "", productoId: "", fechaDesde: "", fechaHasta: "" });
   const [error, setError] = useState("");
   const load = (next = filters) => Promise.all([
@@ -44,6 +46,8 @@ export function PurchasesView({ api, canWrite, isAdmin }: { api: ReturnType<type
     if (!product || cantidad <= 0 || costoUnitario < 0) return;
     setPurchaseItems((current) => [...current.filter((item) => item.product.id !== product.id), { product, cantidad, costoUnitario, actualizarCosto: form.actualizarCosto === "on" }]);
     event.currentTarget.reset();
+    setBuilderProductId("");
+    setCostoUnitario("");
   }
   async function create(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -83,9 +87,9 @@ export function PurchasesView({ api, canWrite, isAdmin }: { api: ReturnType<type
         <div className="step-block">
           <span className="step-badge">2</span>
           <div className="purchase-add-line">
-            <ProductPicker products={products} name="productoId" form="add-purchase-product" />
+            <ProductPicker products={products} name="productoId" form="add-purchase-product" value={builderProductId} onChange={(id) => { setBuilderProductId(id); const prod = products.find((p) => p.id === id); setCostoUnitario(prod ? String(Number(prod.costo)) : ""); }} />
             <label className="field-label"><span>Cantidad</span><input name="cantidad" form="add-purchase-product" type="number" min="1" placeholder="Unidades" required /></label>
-            <label className="field-label"><span>Costo unitario</span><input name="costoUnitario" form="add-purchase-product" type="number" step="0.01" min="0" placeholder="0,00" required /></label>
+            <label className="field-label"><span>Costo unitario</span><input name="costoUnitario" form="add-purchase-product" type="number" step="0.01" min="0" placeholder="0,00" value={costoUnitario} onChange={(e) => setCostoUnitario(e.target.value)} required /></label>
             <label className="check purchase-check"><input name="actualizarCosto" form="add-purchase-product" type="checkbox" defaultChecked />Actualizar costo del producto</label>
             <button type="submit" form="add-purchase-product">Agregar</button>
           </div>

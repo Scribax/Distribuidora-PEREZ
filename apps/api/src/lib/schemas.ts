@@ -54,6 +54,25 @@ export const clienteSchema = z.object({
   activo: z.boolean().optional()
 });
 
+export const clientePagoSchema = z.object({
+  fecha: z.coerce.date().default(() => new Date()),
+  monto: moneySchema.refine((v) => v > 0, "El monto debe ser mayor a 0"),
+  metodoPago: z.enum(["EFECTIVO", "TRANSFERENCIA", "TARJETA", "CHEQUE", "OTRO"]).optional().nullable(),
+  observaciones: z.string().transform(cleanText).optional().nullable()
+});
+
+export const cotizacionSchema = z.object({
+  clienteId: z.string().uuid().optional().nullable(),
+  clienteNombre: text(150),
+  listaPrecios: z.enum(["MAYORISTA", "MINORISTA"]),
+  descuentoPorcentaje: z.coerce.number().min(0).max(100).default(0),
+  observaciones: z.string().transform(cleanText).optional().nullable(),
+  items: z.array(z.object({
+    productoId: z.string().uuid(),
+    cantidad: positiveIntSchema
+  })).min(1)
+});
+
 export const compraSchema = z.object({
   proveedorId: z.string().uuid().optional().nullable(),
   proveedorNombre: text(150),

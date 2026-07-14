@@ -5,7 +5,7 @@ import { Router } from "express";
 import { Prisma, Rol } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { fail } from "../lib/errors.js";
-import { clienteSchema } from "../lib/schemas.js";
+import { clienteSchema, clientePagoSchema } from "../lib/schemas.js";
 import { pageArgs } from "../lib/validation.js";
 import { requireAuth, requireRoles } from "../middleware/auth.js";
 import { audit, diffFields } from "../lib/audit.js";
@@ -260,11 +260,57 @@ clientsRouter.get("/:id", async (req, res) => {
     where: { id },
     include: {
       remitos: { orderBy: { fecha: "desc" }, take: 50, include: { items: true, vendedor: true } },
-      historialImportado: { orderBy: { createdAt: "desc" }, include: { facturas: { orderBy: { fecha: "desc" } } } }
+      historialImportado: { orderBy: { createdAt: "desc" }, include: { facturas: { orderBy: { fecha: "desc" } } } },
+      pagos: { orderBy: { createdAt: "desc" }, include: { usuario: { select: { nombre: true } } } }
     }
   });
   if (!cliente) fail(404, "CLIENTE_NO_ENCONTRADO", "Cliente no encontrado");
   res.json(cliente);
+});
+
+// Registra un pago imputado al saldo general del cliente (no a un remito puntual).
+// Sirve para cobrar deuda histórica/importada o adelantos que no corresponden a
+// una boleta específica. Descuenta el saldoPendiente del cliente hasta un mínimo de 0.
+clientsRouter.post("/:id/pagos", requireRoles(Rol.ADMINISTRADOR, Rol.EMPLEADO), async (req, res) => {
+  const id = String(req.params.id);
+  const input = clientePagoSchema.parse(req.body);
+  const result = await prisma.$transaction(async (tx) => {
+    const cliente = await tx.cliente.findUnique({ where: { id } });
+    if (!cliente) fail(404, "CLIENTE_NO_ENCONTRADO", "Cliente no encontrado");
+    const saldoAnterior = Number(cliente.saldoPendiente);
+    const monto = Number(input.monto);
+    if (monto > saldoAnterior) {
+      fail(422, "MONTO_EXCEDE_SALDO", `El pago ($${monto.toFixed(2)}) supera el saldo pendiente ($${saldoAnterior.toFixed(2)})`);
+    }
+    const saldoResultante = Number(Math.max(saldoAnterior - monto, 0).toFixed(2));
+    const pago = await tx.clientePago.create({
+      data: {
+        clienteId: cliente.id,
+        fecha: input.fecha,
+        monto,
+        metodoPago: input.metodoPago ?? null,
+        observaciones: input.observaciones ?? null,
+        saldoAnterior,
+        saldoResultante,
+        usuarioId: req.user!.id
+      }
+    });
+    const clienteActualizado = await tx.cliente.update({
+      where: { id: cliente.id },
+      data: { saldoPendiente: saldoResultante }
+    });
+    await audit({
+      usuarioId: req.user!.id,
+      modulo: "Clientes",
+      accion: "REGISTRAR_PAGO",
+      entidad: "Pago cliente",
+      entidadId: pago.id,
+      descripcion: `Registró pago de ${money(monto)} de ${cliente.nombre} (saldo ${money(saldoAnterior)} → ${money(saldoResultante)})`,
+      cambios: { monto, metodoPago: input.metodoPago ?? null, saldoAnterior, saldoResultante }
+    }, tx);
+    return { pago, cliente: clienteActualizado };
+  });
+  res.status(201).json(result);
 });
 
 clientsRouter.post("/importar-historial", requireRoles(Rol.ADMINISTRADOR, Rol.EMPLEADO), async (req, res) => {
@@ -364,47 +410,4 @@ clientsRouter.delete("/:id", requireRoles(Rol.ADMINISTRADOR), async (req, res) =
   await fs.writeFile(backupPath, JSON.stringify({
     deletedAt: new Date().toISOString(),
     deletedBy: req.user,
-    warning: "Backup generado automáticamente antes de eliminar definitivamente el cliente.",
-    cliente
-  }, null, 2), "utf8");
-
-  await prisma.$transaction(async (tx) => {
-    for (const remito of cliente.remitos) {
-      if (remito.estado === "ACTIVO") {
-        const pendingDebt = remitoDebt(Number(remito.total), Number(remito.montoPagado), remito.pagoEstado);
-        if (pendingDebt !== 0) {
-          await tx.cliente.update({ where: { id: cliente.id }, data: { saldoPendiente: { decrement: pendingDebt } } });
-        }
-        for (const item of remito.items) {
-          await tx.producto.update({ where: { id: item.productoId }, data: { stockActual: { increment: item.cantidad } } });
-          const producto = await tx.producto.findUnique({ where: { id: item.productoId }, select: { stockActual: true } });
-          await tx.movimientoStock.create({
-            data: {
-              productoId: item.productoId,
-              tipo: "CANCELACION_REMITO",
-              cantidad: item.cantidad,
-              stockResultante: producto?.stockActual ?? item.cantidad,
-              usuarioId: req.user!.id,
-              referenciaId: remito.id,
-              referenciaTipo: "Remito",
-              motivo: `Restauración por eliminación definitiva del cliente ${cliente.nombre}`
-            }
-          });
-        }
-      }
-      await tx.remitoItem.deleteMany({ where: { remitoId: remito.id } });
-    }
-    await tx.remito.deleteMany({ where: { clienteId: cliente.id } });
-    await tx.cliente.delete({ where: { id: cliente.id } });
-    await audit({
-      usuarioId: req.user!.id,
-      modulo: "Clientes",
-      accion: "ELIMINAR",
-      entidad: "Cliente",
-      entidadId: cliente.id,
-      descripcion: `Eliminó definitivamente el cliente ${cliente.nombre}`,
-      cambios: { backupPath, boletasEliminadas: cliente.remitos.length, antes: cliente }
-    }, tx);
-  });
-  res.status(204).send();
-});
+    warning: "Backup generado a

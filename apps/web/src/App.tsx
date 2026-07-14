@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
-import { BarChart3, Boxes, Calculator, CalendarClock, LogOut, Menu, Moon, PackagePlus, ReceiptText, ShoppingCart, Sun, UserCog, Users, X } from "lucide-react";
+import { BarChart3, Boxes, Calculator, CalendarClock, FileText, LogOut, Menu, Moon, PackagePlus, ReceiptText, ShoppingCart, Sun, UserCog, Users, X } from "lucide-react";
 import { useApi } from "./api";
 import { Login } from "./Login";
 import type { Session } from "./types";
-import { BalanceView, ClientsView, CommercialsView, DashboardView, ExpensesView, ProductsView, PurchasesView, RemittancesView, ReportsView, StockView, UsersView } from "./pages/index";
+import { BalanceView, ClientsView, CommercialsView, DashboardView, ExpensesView, ProductsView, PurchasesView, QuotesView, RemittancesView, ReportsView, StockView, UsersView } from "./pages/index";
 
 export default function App() {
   const [session, setSession] = useState<Session | null>(() => {
@@ -35,6 +35,7 @@ export default function App() {
     ["clientes", Users, "Clientes"],
     ["compras", ShoppingCart, "Compras"],
     ["remitos", ReceiptText, "Ventas"],
+    ...(session.user.rol === "CONSULTA" ? [] : [["cotizaciones", FileText, "Cotizaciones"] as const]),
     ...(session.user.rol === "CONSULTA" ? [] : [["gastos", Calculator, "Gastos"] as const]),
     ...(session.user.rol === "CONSULTA" ? [] : [["balance", Calculator, "Balance"] as const]),
     ...(session.user.rol === "CONSULTA" ? [] : [["informes", BarChart3, "Informes"] as const]),
@@ -48,6 +49,7 @@ export default function App() {
     clientes: "Datos, saldos e historial de compradores",
     compras: "Ingreso de mercaderia y proveedores",
     remitos: "Carga de ventas, boletas y pagos",
+    cotizaciones: "Presupuestos sin afectar stock ni saldo",
     gastos: "Egresos operativos del mes",
     balance: "Caja, deudas y resultado general",
     informes: "Reportes y auditoria de movimientos",
@@ -93,6 +95,7 @@ export default function App() {
       {view === "clientes" && <ClientsView api={api} canWrite={session.user.rol !== "CONSULTA"} canEditBalance={session.user.rol === "ADMINISTRADOR"} />}
       {view === "compras" && <PurchasesView api={api} canWrite={session.user.rol !== "CONSULTA"} isAdmin={session.user.rol === "ADMINISTRADOR"} />}
       {view === "remitos" && <RemittancesView api={api} canWrite={session.user.rol !== "CONSULTA"} isAdmin={session.user.rol === "ADMINISTRADOR"} />}
+      {view === "cotizaciones" && <QuotesView api={api} canWrite={session.user.rol !== "CONSULTA"} />}
       {view === "gastos" && <ExpensesView api={api} isAdmin={session.user.rol === "ADMINISTRADOR"} />}
       {view === "balance" && <BalanceView api={api} />}
       {view === "informes" && <ReportsView api={api} />}

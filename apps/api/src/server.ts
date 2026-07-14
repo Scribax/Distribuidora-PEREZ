@@ -15,6 +15,7 @@ import { vendorsRouter } from "./routes/vendors.js";
 import { reportsRouter } from "./routes/reports.js";
 import { suppliersRouter } from "./routes/suppliers.js";
 import { expensesRouter } from "./routes/expenses.js";
+import { quotesRouter } from "./routes/quotes.js";
 
 const app = express();
 app.use(helmet());
@@ -34,6 +35,7 @@ app.use("/api/vendedores", vendorsRouter);
 app.use("/api/proveedores", suppliersRouter);
 app.use("/api/gastos", expensesRouter);
 app.use("/api/informes", reportsRouter);
+app.use("/api/cotizaciones", quotesRouter);
 app.use(errorHandler);
 
 app.listen(config.port, () => {
