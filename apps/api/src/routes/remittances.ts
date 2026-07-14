@@ -457,4 +457,9 @@ remittancesRouter.get("/:id/pdf", async (req, res) => {
   const saldoY = totalsY + 82;
   doc.roundedRect(left, saldoY, pageWidth, 30, 4).fillAndStroke("#f2f2f2", "#cccccc");
   doc.fillColor("#333333").fontSize(9).text("SALDO DE SU CTA CTE A LA FECHA", left + 12, saldoY + 10, { width: 260 });
-  doc.fillColor("#111111").fontSize(15).text(money(saldoCuentaCorriente), right - 210, saldoY + 7, { width: 198, align: 
+  doc.fillColor("#111111").fontSize(15).text(money(saldoCuentaCorriente), right - 210, saldoY + 7, { width: 198, align: "right" });
+
+  drawFooter();
+  doc.end();
+});
+

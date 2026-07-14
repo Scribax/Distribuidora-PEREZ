@@ -379,4 +379,32 @@ model CuentaComercialMovimiento {
   observaciones String?
   usuarioId     String              @map("usuario_id") @db.Uuid
   vendedor      Vendedor            @relation(fields: [vendedorId], references: [id])
-  usuario       User                @relation(fields: [
+  usuario       User                @relation(fields: [usuarioId], references: [id])
+  createdAt     DateTime            @default(now()) @map("created_at")
+  updatedAt     DateTime            @updatedAt @map("updated_at")
+
+  @@index([vendedorId])
+  @@index([fecha])
+  @@index([tipo])
+  @@map("cuentas_comerciales_movimientos")
+}
+
+model AuditLog {
+  id          String   @id @default(uuid()) @db.Uuid
+  usuarioId   String   @map("usuario_id") @db.Uuid
+  modulo      String   @db.VarChar(60)
+  accion      String   @db.VarChar(60)
+  entidad     String   @db.VarChar(80)
+  entidadId   String?  @map("entidad_id") @db.Uuid
+  descripcion String   @db.VarChar(300)
+  cambios     Json?
+  usuario     User     @relation(fields: [usuarioId], references: [id])
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([usuarioId])
+  @@index([modulo])
+  @@index([accion])
+  @@index([entidad])
+  @@index([createdAt])
+  @@map("audit_logs")
+}

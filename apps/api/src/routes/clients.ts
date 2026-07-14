@@ -410,4 +410,47 @@ clientsRouter.delete("/:id", requireRoles(Rol.ADMINISTRADOR), async (req, res) =
   await fs.writeFile(backupPath, JSON.stringify({
     deletedAt: new Date().toISOString(),
     deletedBy: req.user,
-    warning: "Backup generado a
+    warning: "Backup generado automaticamente antes de eliminar definitivamente el cliente.",
+    cliente
+  }, null, 2), "utf8");
+
+  await prisma.$transaction(async (tx) => {
+    for (const remito of cliente.remitos) {
+      if (remito.estado === "ACTIVO") {
+        const pendingDebt = remitoDebt(Number(remito.total), Number(remito.montoPagado), remito.pagoEstado);
+        if (pendingDebt !== 0) {
+          await tx.cliente.update({ where: { id: cliente.id }, data: { saldoPendiente: { decrement: pendingDebt } } });
+        }
+        for (const item of remito.items) {
+          await tx.producto.update({ where: { id: item.productoId }, data: { stockActual: { increment: item.cantidad } } });
+          const producto = await tx.producto.findUnique({ where: { id: item.productoId }, select: { stockActual: true } });
+          await tx.movimientoStock.create({
+            data: {
+              productoId: item.productoId,
+              tipo: "CANCELACION_REMITO",
+              cantidad: item.cantidad,
+              stockResultante: producto?.stockActual ?? item.cantidad,
+              usuarioId: req.user!.id,
+              referenciaId: remito.id,
+              referenciaTipo: "Remito",
+              motivo: `Restauración por eliminación definitiva del cliente ${cliente.nombre}`
+            }
+          });
+        }
+      }
+      await tx.remitoItem.deleteMany({ where: { remitoId: remito.id } });
+    }
+    await tx.remito.deleteMany({ where: { clienteId: cliente.id } });
+    await tx.cliente.delete({ where: { id: cliente.id } });
+    await audit({
+      usuarioId: req.user!.id,
+      modulo: "Clientes",
+      accion: "ELIMINAR",
+      entidad: "Cliente",
+      entidadId: cliente.id,
+      descripcion: `Eliminó definitivamente el cliente ${cliente.nombre}`,
+      cambios: { backupPath, boletasEliminadas: cliente.remitos.length, antes: cliente }
+    }, tx);
+  });
+  res.status(204).send();
+});
