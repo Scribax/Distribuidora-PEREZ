@@ -1132,6 +1132,13 @@ header span { color: var(--muted); }
 .historical-invoice.head {
   background: var(--surface-soft);
 }
+.historical-invoice-scroll {
+  display: grid;
+  gap: 6px;
+  max-height: 340px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
 .historical-total {
   display: flex;
   justify-content: flex-end;

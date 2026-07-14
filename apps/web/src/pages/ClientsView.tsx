@@ -440,7 +440,9 @@ function HistoricalImportCard({ importacion }: { importacion: any }) {
     </button>
     {open && <div className="historical-invoices">
       <div className="historical-invoice head"><strong>Nro</strong><strong>Fecha</strong><strong>Total</strong><strong>Pagado</strong></div>
-      {facturas.map((factura: any) => <div className="historical-invoice" key={factura.id}><span>#{factura.numero}</span><span>{formatDate(factura.fecha)}</span><span>{money(factura.total)}</span><span>{money(factura.pagado)}</span></div>)}
+      <div className="historical-invoice-scroll">
+        {facturas.map((factura: any) => <div className="historical-invoice" key={factura.id}><span>#{factura.numero}</span><span>{formatDate(factura.fecha)}</span><span>{money(factura.total)}</span><span>{money(factura.pagado)}</span></div>)}
+      </div>
       <div className="historical-total"><span>Total {money(importacion.total)}</span><span>Pagado {money(importacion.pagado)}</span><span>Saldo {money(importacion.saldo)}</span></div>
     </div>}
   </article>;
