@@ -13,6 +13,7 @@ export function StockView({ api, isAdmin }: { api: ReturnType<typeof useApi>; is
   const [q, setQ] = useState("");
   const [error, setError] = useState("");
   const [stats, setStats] = useState({ totalProducts: 0, lowStockCount: 0, stockValue: 0 });
+  const [adjustProductId, setAdjustProductId] = useState("");
 
   const load = (next = filters) => Promise.all([
     api(`/stock/movimientos?${qs({ ...next, pageSize: 100 })}`),
@@ -27,10 +28,12 @@ export function StockView({ api, isAdmin }: { api: ReturnType<typeof useApi>; is
   async function adjust(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = payload(event.currentTarget);
+    if (!adjustProductId) return setError("Elegí un producto para ajustar.");
     if (!confirmAction("¿Confirmar ajuste manual de stock?")) return;
     try {
-      await api("/stock/ajustes", { method: "POST", body: JSON.stringify({ productoId: form.productoId, cantidadNueva: Number(form.cantidadNueva), motivo: form.motivo }) });
+      await api("/stock/ajustes", { method: "POST", body: JSON.stringify({ productoId: adjustProductId, cantidadNueva: Number(form.cantidadNueva), motivo: form.motivo }) });
       event.currentTarget.reset();
+      setAdjustProductId("");
       await load();
     } catch (err: any) {
       setError(err.message ?? "No se pudo ajustar el stock");
@@ -83,7 +86,7 @@ export function StockView({ api, isAdmin }: { api: ReturnType<typeof useApi>; is
             <input value={q} onChange={(event) => setQ(event.target.value)} placeholder="Buscar producto, código o rubro" />
           </label>
           <form className="stock-filter-bar" onSubmit={(e) => { e.preventDefault(); load(filters); }}>
-            <select value={filters.productoId} onChange={(e) => setFilters({ ...filters, productoId: e.target.value })}><option value="">Todos los productos</option>{products.map((p) => <option value={p.id} key={p.id}>{p.nombre}</option>)}</select>
+            <EntityPicker items={products} value={filters.productoId} onChange={(value) => setFilters({ ...filters, productoId: value })} title="Filtrar por producto" placeholder="Todos los productos" searchPlaceholder="Buscar por nombre, código o rubro" getLabel={(product) => product.nombre} getMeta={(product) => `${product.codigoInterno} · stock ${product.stockActual} · ${product.categoria?.nombre ?? "Sin rubro"}`} />
             <select value={filters.tipo} onChange={(e) => setFilters({ ...filters, tipo: e.target.value })}><option value="">Todos los movimientos</option><option value="COMPRA">Entradas por compra</option><option value="REMITO">Salidas por remito</option><option value="ALTA_PRODUCTO">Stock inicial</option><option value="CANCELACION_REMITO">Cancelaciones</option><option value="ANULACION_COMPRA">Anulación compra</option><option value="AJUSTE_MANUAL">Ajuste manual</option></select>
             <input type="date" value={filters.fechaDesde} onChange={(e) => setFilters({ ...filters, fechaDesde: e.target.value })} />
             <input type="date" value={filters.fechaHasta} onChange={(e) => setFilters({ ...filters, fechaHasta: e.target.value })} />
@@ -110,7 +113,7 @@ export function StockView({ api, isAdmin }: { api: ReturnType<typeof useApi>; is
           <button type="button" className="secondary" onClick={() => setProductPage((p) => Math.min(totalProductPages, p + 1))} disabled={productPage === totalProductPages}>Siguiente</button>
         </div>}
       </section>
-      {isAdmin && <section className="panel stock-adjust-panel"><div><h2>Ajuste manual</h2><span>Usalo solo para corregir diferencias físicas de stock.</span></div><form className="form" onSubmit={adjust}><select name="productoId" required><option value="">Producto</option>{products.map((p) => <option value={p.id} key={p.id}>{p.nombre} · actual {p.stockActual}</option>)}</select><input name="cantidadNueva" type="number" min="0" placeholder="Nueva cantidad" required /><input name="motivo" placeholder="Motivo del ajuste" required minLength={10} />{error && <p className="error">{error}</p>}<button>Registrar ajuste</button></form></section>}
+      {isAdmin && <section className="panel stock-adjust-panel"><div><h2>Ajuste manual</h2><span>Usalo solo para corregir diferencias físicas de stock.</span></div><form className="form" onSubmit={adjust}><EntityPicker items={products} value={adjustProductId} onChange={setAdjustProductId} name="productoId" title="Elegir producto" placeholder="Elegir producto" searchPlaceholder="Buscar por nombre, código o rubro" getLabel={(product) => product.nombre} getMeta={(product) => `${product.codigoInterno} · actual ${product.stockActual}`} required /><input name="cantidadNueva" type="number" min="0" placeholder="Nueva cantidad" required /><input name="motivo" placeholder="Motivo del ajuste" required minLength={10} />{error && <p className="error">{error}</p>}<button>Registrar ajuste</button></form></section>}
     </div>
   </div>;
 }
