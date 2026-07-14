@@ -7385,3 +7385,185 @@ body:has(.modal-backdrop) {
     border-radius: 16px;
   }
 }
+
+/* ===== Balance v2 ===== */
+.balance-v2 {
+  display: grid;
+  gap: 16px;
+}
+.balance-hero {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 22px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+  box-shadow: 0 1px 2px var(--shadow);
+}
+.balance-hero-info h2 {
+  margin: 4px 0 6px;
+  font-size: 26px;
+  line-height: 1.1;
+  text-transform: capitalize;
+}
+.balance-hero-info p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+.balance-period {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+}
+.balance-period label {
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.balance-period input,
+.balance-period select {
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+.balance-period input { width: 90px; }
+.balance-period select { min-width: 150px; text-transform: capitalize; }
+.balance-period button {
+  height: 40px;
+  padding: 0 18px;
+}
+
+.balance-result {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 22px 24px;
+  border-radius: 16px;
+  color: #fff;
+  box-shadow: 0 10px 30px -12px var(--shadow);
+}
+.balance-result.positive {
+  background: linear-gradient(135deg, #147a4a, #0f5c37);
+}
+.balance-result.negative {
+  background: linear-gradient(135deg, #c0392b, #96271b);
+}
+.balance-result-icon {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.18);
+  flex-shrink: 0;
+}
+.balance-result-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.balance-result-text span {
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+.balance-result-text strong {
+  font-size: clamp(28px, 4vw, 40px);
+  line-height: 1.05;
+}
+.balance-result-text small {
+  font-size: 12.5px;
+  opacity: 0.9;
+}
+
+.balance-metrics-v2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+.balance-metrics-v2 .metric-v2 {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 88px;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: 0 1px 2px var(--shadow);
+}
+.balance-metrics-v2 .metric-v2 > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  grid-column: 1;
+  grid-row: 1;
+}
+.balance-metrics-v2 .metric-v2 span {
+  color: var(--muted);
+  font-size: 13px;
+}
+.balance-metrics-v2 .metric-v2 strong {
+  font-size: clamp(18px, 1.7vw, 24px);
+  line-height: 1.1;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+.balance-metrics-v2 .metric-icon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+}
+.balance-metrics-v2 .tone-red { border-left-color: var(--brand-red); }
+.balance-metrics-v2 .tone-red .metric-icon { color: var(--brand-red); background: rgba(226, 27, 35, 0.12); }
+.balance-metrics-v2 .tone-blue { border-left-color: var(--brand-blue); }
+.balance-metrics-v2 .tone-blue .metric-icon { color: var(--brand-blue); background: rgba(21, 88, 168, 0.12); }
+.balance-metrics-v2 .tone-green { border-left-color: var(--success); }
+.balance-metrics-v2 .tone-green .metric-icon { color: var(--success); background: rgba(20, 122, 74, 0.14); }
+.balance-metrics-v2 .tone-amber { border-left-color: var(--brand-yellow); }
+.balance-metrics-v2 .tone-amber .metric-icon { color: #b7860b; background: rgba(242, 201, 76, 0.2); }
+.balance-metrics-v2 .tone-slate { border-left-color: #64748b; }
+.balance-metrics-v2 .tone-slate .metric-icon { color: #475569; background: rgba(71, 85, 105, 0.12); }
+
+.balance-chart-panel,
+.balance-v2 .cashbox-panel {
+  padding: 18px 20px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+  box-shadow: 0 1px 2px var(--shadow);
+}
+.cashbox-method {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  color: var(--text);
+}
+.cashbox-method-icon {
+  display: inline-grid;
+  place-items: center;
+  color: var(--muted);
+}
+
+@media (max-width: 640px) {
+  .balance-hero { flex-direction: column; align-items: stretch; }
+  .balance-period { width: 100%; }
+  .balance-period label { flex: 1; }
+  .balance-period button { width: 100%; }
+  .balance-result-text strong { font-size: 28px; }
+}
