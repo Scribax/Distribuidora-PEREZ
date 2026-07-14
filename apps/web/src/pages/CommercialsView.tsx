@@ -22,6 +22,7 @@ export function CommercialsView({ api, isAdmin, canWrite }: { api: ReturnType<ty
   const [commissionMessage, setCommissionMessage] = useState("");
   const [accountRows, setAccountRows] = useState<any[]>([]);
   const [accountMovements, setAccountMovements] = useState<any[]>([]);
+  const [accountVendorId, setAccountVendorId] = useState("");
   const loadVendors = () => api("/vendedores?pageSize=100").then((d) => setVendors(d.items));
   const loadSuppliers = () => api("/proveedores?pageSize=100").then((d) => setSuppliers(d.items));
   const loadCommissionRows = (period = commissionPeriod) => api(`/vendedores/comisiones/gastos?${qs(period)}`).then((data) => setCommissionRows(data.items ?? [])).catch(() => setCommissionRows([]));
@@ -108,6 +109,7 @@ export function CommercialsView({ api, isAdmin, canWrite }: { api: ReturnType<ty
     try {
       await api("/vendedores/cuenta/movimientos", { method: "POST", body: JSON.stringify({ vendedorId: form.vendedorId, tipo: form.tipo, fecha: form.fecha, monto: Number(form.monto), metodoPago: form.metodoPago || null, descripcion: form.descripcion, comprobante: form.comprobante || null, observaciones: form.observaciones || null }) });
       formEl.reset();
+      setAccountVendorId("");
       await loadAccountRows(commissionPeriod);
       await loadCommissionRows(commissionPeriod);
     } catch (err: any) {
@@ -192,7 +194,7 @@ export function CommercialsView({ api, isAdmin, canWrite }: { api: ReturnType<ty
             </div>)}
           </div>
           <form className="account-form" onSubmit={createAccountMovement}>
-            <label className="field-label"><span>Vendedor</span><select name="vendedorId" required defaultValue=""><option value="" disabled>Elegir</option>{vendors.map((vendor) => <option value={vendor.id} key={vendor.id}>{vendor.nombre}</option>)}</select></label>
+            <label className="field-label"><span>Vendedor</span><EntityPicker items={vendors} value={accountVendorId} onChange={setAccountVendorId} name="vendedorId" title="Elegir vendedor" placeholder="Elegir vendedor" searchPlaceholder="Buscar vendedor" getLabel={(vendor) => vendor.nombre} getMeta={(vendor) => `${Number(vendor.porcentajeComision)}% comisión`} required /></label>
             <label className="field-label"><span>Tipo</span><select name="tipo" defaultValue="APORTE"><option value="APORTE">Aporte</option><option value="RETIRO">Retiro</option><option value="AJUSTE">Ajuste</option></select></label>
             <label className="field-label"><span>Fecha</span><input name="fecha" type="date" defaultValue={dateInput()} required /></label>
             <label className="field-label"><span>Monto</span><input name="monto" type="number" step="0.01" min="0.01" required placeholder="0,00" /></label>

@@ -316,6 +316,7 @@ function RemitoDetail({ selected, canWrite, activeVendors, editItems, products, 
 
 function RemitoEditModal({ selected, activeVendors, editItems, products, editProductId, savingEdit, editSaved, onClose, onSaveEdit, onEditProductChange, onEditItemsChange, onAddEditItem }: { selected: any; activeVendors: Vendor[]; editItems: LineItem[]; products: Product[]; editProductId: string; savingEdit: boolean; editSaved: boolean; onClose: () => void; onSaveEdit: (event: React.FormEvent<HTMLFormElement>) => void; onEditProductChange: (value: string) => void; onEditItemsChange: React.Dispatch<React.SetStateAction<LineItem[]>>; onAddEditItem: (event: React.FormEvent<HTMLFormElement>) => void }) {
   const subtotal = editItems.reduce((sum, item) => sum + item.cantidad * itemPrice(item.product, selected.listaPrecios), 0);
+  const [editVendorId, setEditVendorId] = useState<string>(selected.vendedorId ?? "");
   return <div className="modal-backdrop remito-edit-backdrop" role="dialog" aria-modal="true" aria-label={`Editar boleta ${selected.numero}`} onClick={onClose}>
     <section className="remito-edit-modal" onClick={(event) => event.stopPropagation()}>
       <div className="detail-head remito-detail-head">
@@ -325,7 +326,7 @@ function RemitoEditModal({ selected, activeVendors, editItems, products, editPro
       <form className="form remito-edit-form" onSubmit={onSaveEdit}>
         <fieldset disabled={savingEdit}>
           <div className="payment-grid remito-edit-payment">
-            <label className="field-card"><span>Vendedor</span><select name="vendedorId" defaultValue={selected.vendedorId ?? ""}><option value="">Sin vendedor</option>{activeVendors.map((v) => <option value={v.id} key={v.id}>{v.nombre} · {Number(v.porcentajeComision)}%</option>)}</select><small>Para calcular comisión.</small></label>
+            <label className="field-card"><span>Vendedor</span><EntityPicker items={activeVendors} value={editVendorId} onChange={setEditVendorId} name="vendedorId" title="Elegir vendedor" placeholder="Sin vendedor" searchPlaceholder="Buscar vendedor" getLabel={(v) => v.nombre} getMeta={(v) => `${Number(v.porcentajeComision)}% comisión`} /><small>Para calcular comisión.</small></label>
             <label className="field-card"><span>Estado del pago</span><select name="pagoEstado" defaultValue={selected.pagoEstado}><option value="PENDIENTE">Pendiente</option><option value="PARCIAL">Parcial</option><option value="PAGADA">Pagada</option></select><small>Seguimiento de deuda.</small></label>
             <label className="field-card"><span>Método</span><select name="metodoPago" defaultValue={selected.metodoPago ?? ""}><option value="">Sin método</option><option value="EFECTIVO">Efectivo</option><option value="TRANSFERENCIA">Transferencia</option><option value="TARJETA">Tarjeta</option><option value="CHEQUE">Cheque</option><option value="OTRO">Otro</option></select><small>Opcional.</small></label>
             <label className="field-card"><span>Monto pagado</span><input name="montoPagado" type="number" step="0.01" min="0" defaultValue={Number(selected.montoPagado)} /><small>Total: {money(selected.total)}</small></label>
