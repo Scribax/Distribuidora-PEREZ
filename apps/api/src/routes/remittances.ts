@@ -367,7 +367,7 @@ remittancesRouter.get("/:id/pdf", async (req, res) => {
   res.setHeader("Content-Disposition", `inline; filename="remito-${remito.numero}.pdf"`);
   const doc = new PDFDocument({ size: "A4", margin: 32 });
   doc.pipe(res);
-  const money = (value: unknown) => `$${Number(value).toFixed(2)}`;
+  const money = (value: unknown) => `$${new Intl.NumberFormat("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(value) || 0)}`;
   const deudaBoleta = remitoPending(Number(remito.total), Number(remito.montoPagado), remito.pagoEstado);
   const saldoCuentaCorriente = Math.max(Number(remito.cliente.saldoPendiente), deudaBoleta);
   const discountAmount = Number(remito.subtotal) - Number(remito.total);

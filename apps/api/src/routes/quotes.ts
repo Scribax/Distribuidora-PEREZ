@@ -53,7 +53,7 @@ quotesRouter.post("/pdf", requireRoles(Rol.ADMINISTRADOR, Rol.EMPLEADO), async (
   res.setHeader("Content-Disposition", `inline; filename="cotizacion.pdf"`);
   const doc = new PDFDocument({ size: "A4", margin: 32 });
   doc.pipe(res);
-  const money = (value: unknown) => `$${Number(value).toFixed(2)}`;
+  const money = (value: unknown) => `$${new Intl.NumberFormat("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(value) || 0)}`;
   const pageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
   const left = doc.page.margins.left;
   const right = left + pageWidth;
