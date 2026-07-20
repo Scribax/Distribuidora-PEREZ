@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { GastoCategoria, Prisma, Rol } from "@prisma/client";
+import { endOfDay } from "date-fns";
 import { prisma } from "../lib/prisma.js";
 import { fail } from "../lib/errors.js";
 import { gastoSchema } from "../lib/schemas.js";
@@ -15,7 +16,7 @@ expensesRouter.get("/", async (req, res) => {
   const q = String(req.query.q ?? "").trim();
   const categoria = String(req.query.categoria ?? "");
   const fechaDesde = req.query.fechaDesde ? new Date(String(req.query.fechaDesde)) : undefined;
-  const fechaHasta = req.query.fechaHasta ? new Date(String(req.query.fechaHasta)) : undefined;
+  const fechaHasta = req.query.fechaHasta ? endOfDay(new Date(String(req.query.fechaHasta))) : undefined;
   const where: Prisma.GastoWhereInput = {
     categoria: categoria ? categoria as GastoCategoria : undefined,
     fecha: fechaDesde || fechaHasta ? { gte: fechaDesde, lte: fechaHasta } : undefined,

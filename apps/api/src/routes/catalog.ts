@@ -39,8 +39,11 @@ catalogRouter.post("/categorias", requireRoles(Rol.ADMINISTRADOR), async (req, r
       cambios: { despues: categoria }
     });
     res.status(201).json(categoria);
-  } catch {
-    fail(422, "CATEGORIA_DUPLICADA", "La categoría ya existe");
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+      fail(422, "CATEGORIA_DUPLICADA", "La categoría ya existe");
+    }
+    throw err;
   }
 });
 
@@ -122,8 +125,11 @@ catalogRouter.post("/productos", requireRoles(Rol.ADMINISTRADOR, Rol.EMPLEADO), 
       return created;
     });
     res.status(201).json(producto);
-  } catch {
-    fail(422, "CODIGO_DUPLICADO", "El código interno ya existe en otro producto");
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+      fail(422, "CODIGO_DUPLICADO", "El código interno ya existe en otro producto");
+    }
+    throw err;
   }
 });
 
@@ -181,6 +187,9 @@ catalogRouter.patch("/productos/:id", requireRoles(Rol.ADMINISTRADOR, Rol.EMPLEA
         motivo: "Ajuste desde edición de producto"
       });
     }
+    // Re-leemos el producto después del ajuste de stock para que la respuesta
+    // refleje el stock real que quedó en la base de datos.
+    const final = await tx.producto.findUnique({ where: { id }, include: { categoria: true } });
     await audit({
       usuarioId: req.user!.id,
       modulo: "Productos",
@@ -188,9 +197,9 @@ catalogRouter.patch("/productos/:id", requireRoles(Rol.ADMINISTRADOR, Rol.EMPLEA
       entidad: "Producto",
       entidadId: updated.id,
       descripcion: `Editó el producto ${updated.nombre}`,
-      cambios: diffFields(current, { ...updated, stockActual: input.stockActual ?? current.stockActual }, ["codigoInterno", "nombre", "categoriaId", "precioMayorista", "precioMinorista", "costo", "stockActual", "stockMinimo", "activo"])
+      cambios: diffFields(current, { ...final, stockActual: final?.stockActual ?? current.stockActual }, ["codigoInterno", "nombre", "categoriaId", "precioMayorista", "precioMinorista", "costo", "stockActual", "stockMinimo", "activo"])
     }, tx);
-    return updated;
+    return final ?? updated;
   });
   res.json(producto);
 });

@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Router } from "express";
 import { MetodoPago, PagoEstado, Prisma, RemitoEstado, Rol } from "@prisma/client";
+import { endOfDay } from "date-fns";
 import { prisma } from "../lib/prisma.js";
 import { fail } from "../lib/errors.js";
 import { remitoSchema, remitoUpdateSchema } from "../lib/schemas.js";
@@ -53,7 +54,7 @@ remittancesRouter.get("/", async (req, res) => {
   const clienteId = String(req.query.clienteId ?? "");
   const vendedorId = String(req.query.vendedorId ?? "");
   const fechaDesde = req.query.fechaDesde ? new Date(String(req.query.fechaDesde)) : undefined;
-  const fechaHasta = req.query.fechaHasta ? new Date(String(req.query.fechaHasta)) : undefined;
+  const fechaHasta = req.query.fechaHasta ? endOfDay(new Date(String(req.query.fechaHasta))) : undefined;
   const where: Prisma.RemitoWhereInput = {
     numero,
     estado: estado ? (estado as RemitoEstado) : undefined,

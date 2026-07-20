@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { Prisma, Rol } from "@prisma/client";
+import { endOfDay } from "date-fns";
 import { prisma } from "../lib/prisma.js";
 import { fail } from "../lib/errors.js";
 import { compraSchema } from "../lib/schemas.js";
@@ -16,7 +17,7 @@ purchasesRouter.get("/", async (req, res) => {
   const proveedor = String(req.query.proveedor ?? "").trim();
   const productoId = String(req.query.productoId ?? "");
   const fechaDesde = req.query.fechaDesde ? new Date(String(req.query.fechaDesde)) : undefined;
-  const fechaHasta = req.query.fechaHasta ? new Date(String(req.query.fechaHasta)) : undefined;
+  const fechaHasta = req.query.fechaHasta ? endOfDay(new Date(String(req.query.fechaHasta))) : undefined;
   const where: Prisma.CompraWhereInput = {
     OR: proveedor ? [
       { proveedorNombre: { contains: proveedor, mode: "insensitive" } },

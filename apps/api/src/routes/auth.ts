@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { prisma } from "../lib/prisma.js";
 import { fail } from "../lib/errors.js";
-import { hashToken, issueTokens, signAccessToken, verifyPassword } from "../lib/auth.js";
+import { hashToken, issueTokens, newRefreshToken, signAccessToken, verifyPassword } from "../lib/auth.js";
 import { loginSchema } from "../lib/schemas.js";
 import { requireAuth } from "../middleware/auth.js";
 import { config } from "../lib/config.js";
@@ -25,11 +25,26 @@ authRouter.post("/refresh", async (req, res) => {
   if (!stored || stored.revoked || stored.expiresAt < new Date()) fail(401, "TOKEN_REVOCADO", "Refresh token inválido o revocado");
   if (!stored.user.activo) fail(401, "CUENTA_DESACTIVADA", "Cuenta desactivada. Contacte al administrador");
   const expiresAt = new Date(Date.now() + config.refreshTokenDays * 24 * 60 * 60 * 1000);
-  await prisma.refreshToken.update({ where: { id: stored.id }, data: { expiresAt } });
+  const nextRefreshToken = newRefreshToken();
+  await prisma.$transaction([
+    prisma.refreshToken.update({ where: { id: stored.id }, data: { revoked: true } }),
+    prisma.refreshToken.create({
+      data: {
+        userId: stored.userId,
+        tokenHash: hashToken(nextRefreshToken),
+        expiresAt
+      }
+    })
+  ]);
   res.json({
     accessToken: signAccessToken(stored.user),
-    refreshToken,
-    user: stored.user
+    refreshToken: nextRefreshToken,
+    user: {
+      id: stored.user.id,
+      email: stored.user.email,
+      nombre: stored.user.nombre,
+      rol: stored.user.rol
+    }
   });
 });
 

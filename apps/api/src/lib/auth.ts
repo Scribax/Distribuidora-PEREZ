@@ -47,6 +47,11 @@ export async function issueTokens(user: TokenUser) {
   return {
     accessToken: signAccessToken(user),
     refreshToken,
-    user
+    user: {
+      id: user.id,
+      email: user.email,
+      nombre: user.nombre,
+      rol: user.rol
+    }
   };
 }
