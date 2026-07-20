@@ -7567,3 +7567,17 @@ body:has(.modal-backdrop) {
   .balance-period button { width: 100%; }
   .balance-result-text strong { font-size: 28px; }
 }
+
+/* Actualizaciones / Novedades */
+.updates-page .panel { max-width: 760px; }
+.updates-page h2 { font-size: 18px; margin-bottom: 16px; color: var(--text); }
+.updates-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px; }
+.updates-list li { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border-radius: 8px; background: var(--card); border: 1px solid var(--border); font-size: 14px; line-height: 1.5; color: var(--text); }
+.updates-list time { font-size: 12px; color: var(--muted); white-space: nowrap; min-width: 44px; padding-top: 1px; }
+.updates-badge { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 6px; flex-shrink: 0; margin-top: 1px; }
+.updates-badge.fix { background: #dbeafe; color: #2563eb; }
+.updates-badge.feature { background: #dcfce7; color: #16a34a; }
+.updates-badge.security { background: #fef3c7; color: #d97706; }
+[data-theme="dark"] .updates-badge.fix { background: #1e3a5f; color: #93c5fd; }
+[data-theme="dark"] .updates-badge.feature { background: #14532d; color: #86efac; }
+[data-theme="dark"] .updates-badge.security { background: #422006; color: #fcd34d; }

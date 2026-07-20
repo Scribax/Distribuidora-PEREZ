@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
-import { BarChart3, Boxes, Calculator, CalendarClock, FileText, LogOut, Menu, Moon, PackagePlus, ReceiptText, ShoppingCart, Sun, UserCog, Users, X } from "lucide-react";
+import { BarChart3, Boxes, Calculator, CalendarClock, FileText, LogOut, Megaphone, Menu, Moon, PackagePlus, ReceiptText, ShoppingCart, Sun, UserCog, Users, X } from "lucide-react";
 import { useApi } from "./api";
 import { Login } from "./Login";
 import type { Session } from "./types";
-import { BalanceView, ClientsView, CommercialsView, DashboardView, ExpensesView, ProductsView, PurchasesView, QuotesView, RemittancesView, ReportsView, StockView, UsersView } from "./pages/index";
+import { BalanceView, ClientsView, CommercialsView, DashboardView, ExpensesView, ProductsView, PurchasesView, QuotesView, RemittancesView, ReportsView, StockView, UpdatesView, UsersView } from "./pages/index";
 
 export default function App() {
   const [session, setSession] = useState<Session | null>(() => {
@@ -41,6 +41,7 @@ export default function App() {
     ...(session.user.rol === "CONSULTA" ? [] : [["informes", BarChart3, "Informes"] as const]),
     ...(session.user.rol === "CONSULTA" ? [] : [["comerciales", UserCog, "Comerciales"] as const]),
     ["stock", PackagePlus, "Stock"],
+    ["actualizaciones", Megaphone, "Novedades"],
     ...(session.user.rol === "ADMINISTRADOR" ? [["usuarios", UserCog, "Usuarios"] as const] : [])
   ] as const;
   const viewHelp: Record<string, string> = {
@@ -55,6 +56,7 @@ export default function App() {
     informes: "Reportes y auditoria de movimientos",
     comerciales: "Vendedores, cuentas y comisiones",
     stock: "Existencias, minimos y ajustes",
+    actualizaciones: "Novedades y mejoras del sistema",
     usuarios: "Permisos y cuentas del sistema"
   };
   const currentLabel = nav.find(([id]) => id === view)?.[2] ?? "Dashboard";
@@ -101,6 +103,7 @@ export default function App() {
       {view === "informes" && <ReportsView api={api} />}
       {view === "comerciales" && <CommercialsView api={api} isAdmin={session.user.rol === "ADMINISTRADOR"} canWrite={session.user.rol !== "CONSULTA"} />}
       {view === "stock" && <StockView api={api} isAdmin={session.user.rol === "ADMINISTRADOR"} />}
+      {view === "actualizaciones" && <UpdatesView />}
       {view === "usuarios" && <UsersView api={api} />}
     </section>
     <nav className="mobile-bottom-nav" aria-label="Accesos rápidos">

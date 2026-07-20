@@ -10,3 +10,4 @@ export { BalanceView } from "./BalanceView";
 export { ReportsView } from "./ReportsView";
 export { CommercialsView } from "./CommercialsView";
 export { UsersView } from "./UsersView";
+export { default as UpdatesView } from "./UpdatesView";
