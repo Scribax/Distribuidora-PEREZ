@@ -3212,7 +3212,30 @@ th {
 }
 
 /* Correccion contraste botones sidebar */
-aside .theme-toggle,
+aside .theme-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 8px;
+  padding: 9px 14px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #f7f5f0;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  transition: background 0.2s, border-color 0.2s;
+}
+aside .theme-toggle:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: var(--brand-yellow);
+  color: #ffffff;
+  box-shadow: none;
+}
+aside .theme-toggle svg {
+  flex-shrink: 0;
+  color: var(--brand-yellow);
+}
 aside .logout,
 aside .install-button {
   color: #f7f5f0;
@@ -7581,3 +7604,31 @@ body:has(.modal-backdrop) {
 [data-theme="dark"] .updates-badge.fix { background: #1e3a5f; color: #93c5fd; }
 [data-theme="dark"] .updates-badge.feature { background: #14532d; color: #86efac; }
 [data-theme="dark"] .updates-badge.security { background: #422006; color: #fcd34d; }
+
+/* Botón Claro/Oscuro — pill destacado en sidebar */
+aside button.theme-toggle {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  margin: 4px 8px !important;
+  padding: 9px 14px !important;
+  border-radius: 10px !important;
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  color: var(--text) !important;
+  background: var(--surface-soft) !important;
+  border: 1px solid var(--line) !important;
+  min-height: unset !important;
+}
+aside button.theme-toggle:hover {
+  background: var(--accent) !important;
+  color: #0f172a !important;
+  border-color: var(--accent) !important;
+}
+aside button.theme-toggle svg {
+  flex-shrink: 0;
+  color: var(--accent);
+}
+aside button.theme-toggle:hover svg {
+  color: #0f172a;
+}
