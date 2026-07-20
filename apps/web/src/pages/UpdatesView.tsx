@@ -10,7 +10,6 @@ const updates: { month: string; entries: Entry[] }[] = [
       { date: "20/07", text: "Al editar un producto, ahora la pantalla muestra el stock actualizado al instante, sin necesidad de recargar.", icon: "fix" },
       { date: "20/07", text: "Los filtros por fecha en Ventas, Compras y Gastos ahora incluyen correctamente todas las operaciones del día seleccionado.", icon: "fix" },
       { date: "20/07", text: "Los avisos de cobro pendiente ahora siempre muestran el saldo correcto.", icon: "fix" },
-      { date: "20/07", text: "Se reforzó la seguridad del inicio de sesión: las sesiones activas ahora se renuevan de forma más protegida.", icon: "security" },
     ]
   }
 ];
