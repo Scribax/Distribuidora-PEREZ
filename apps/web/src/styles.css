@@ -3212,30 +3212,7 @@ th {
 }
 
 /* Correccion contraste botones sidebar */
-aside .theme-toggle {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 6px 8px;
-  padding: 9px 14px;
-  border-radius: 10px;
-  font-size: 13px;
-  font-weight: 600;
-  color: #f7f5f0;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  transition: background 0.2s, border-color 0.2s;
-}
-aside .theme-toggle:hover {
-  background: rgba(255, 255, 255, 0.15);
-  border-color: var(--brand-yellow);
-  color: #ffffff;
-  box-shadow: none;
-}
-aside .theme-toggle svg {
-  flex-shrink: 0;
-  color: var(--brand-yellow);
-}
+aside .theme-toggle,
 aside .logout,
 aside .install-button {
   color: #f7f5f0;
