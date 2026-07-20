@@ -106,4 +106,23 @@ Las variables sensibles para los backups (como tokens de nube o credenciales) **
 *   Secretos JWT (`JWT_SECRET`).
 *   Tokens de APIs de terceros.
 *   Claves de proveedores cloud (Cloudflare, R2, AWS, Google Drive, etc.).
-*   Dumps o backups de bases de datos (`.sql`, `.tar`, etc.).
+
+---
+
+## 📋 Actualizaciones
+
+> Resumen de mejoras pensado para el equipo de la distribuidora. Sin tecnicismos.
+
+### Julio 2026
+
+**🟢 Correcciones y mejoras**
+
+- Al editar un producto, ahora la pantalla muestra el stock correcto de inmediato, sin necesidad de recargar.
+- Los filtros por fecha en Ventas, Compras y Gastos ahora incluyen correctamente las operaciones del día seleccionado.
+- Los mensajes de cobro pendiente ahora siempre muestran un saldo positivo, incluso en casos donde el pago registrado supera el total.
+- Los listados de cobros pendientes muestran información de error más clara cuando un remito no existe.
+- Mejora en la creación de productos y categorías: los errores inesperados ahora se informan correctamente en lugar de mostrar siempre "ya existe".
+
+**🔐 Seguridad**
+
+- Se reforzó el sistema de inicio de sesión: los tokens de acceso ahora se renuevan de forma más segura al mantener la sesión abierta.
