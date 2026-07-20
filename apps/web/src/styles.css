@@ -7606,6 +7606,67 @@ aside button.theme-toggle svg {
   flex-shrink: 0;
   color: var(--accent);
 }
-aside button.theme-toggle:hover svg {
-  color: #0f172a;
+aside button.theme-toggle {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  width: calc(100% - 16px) !important;
+  margin: 4px 8px !important;
+  padding: 8px 12px !important;
+  min-height: 40px !important;
+  border: 1px solid var(--line) !important;
+  border-radius: 10px !important;
+  background: var(--surface-soft) !important;
+  color: var(--text) !important;
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  box-shadow: none !important;
+}
+aside button.theme-toggle:hover {
+  background: var(--surface-soft) !important;
+  border-color: var(--accent) !important;
+  color: var(--text) !important;
+  box-shadow: none !important;
+}
+aside button.theme-toggle > svg {
+  flex: 0 0 auto;
+  color: var(--accent);
+}
+aside button.theme-toggle > span:not(.theme-switch) {
+  flex: 1;
+  text-align: left;
+}
+.theme-switch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  width: 34px;
+  height: 19px;
+  padding: 2px;
+  border-radius: 999px;
+  background: var(--line);
+  flex: 0 0 auto;
+  transition: background-color 0.16s ease;
+}
+.theme-switch span {
+  display: block;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: 0 1px 3px var(--shadow-strong);
+  transform: translateX(0);
+  transition: transform 0.16s ease;
+}
+.theme-switch.dark {
+  background: var(--accent);
+}
+.theme-switch.dark span {
+  transform: translateX(15px);
+}
+@media (max-width: 900px) {
+  aside button.theme-toggle {
+    width: calc(100% - 16px) !important;
+    margin-inline: 8px !important;
+  }
 }

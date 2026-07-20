@@ -73,7 +73,18 @@ export default function App() {
     <aside className={navOpen ? "open" : ""}>
       <div className="brand"><img src="/brand-logo-optimized.png" alt="Perez Martin Distribuidora" /><button type="button" className="nav-close" onClick={() => setNavOpen(false)} title="Cerrar menú"><X size={18} /></button></div>
       {nav.map(([id, Icon, label]) => <button key={id} className={view === id ? "active" : ""} onClick={() => { setView(id); setNavOpen(false); }} title={label}><Icon size={18} />{label}</button>)}
-      <button className="theme-toggle" onClick={() => setTheme((current) => current === "dark" ? "light" : "dark")} title={theme === "dark" ? "Modo claro" : "Modo oscuro"}>{theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}{theme === "dark" ? "Claro" : "Oscuro"}</button>
+      <button
+        type="button"
+        className="theme-toggle"
+        onClick={() => setTheme((current) => current === "dark" ? "light" : "dark")}
+        title={theme === "dark" ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
+        aria-label={theme === "dark" ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
+        aria-pressed={theme === "dark"}
+      >
+        {theme === "dark" ? <Sun size={17} /> : <Moon size={17} />}
+        <span>{theme === "dark" ? "Claro" : "Oscuro"}</span>
+        <span className={`theme-switch ${theme}`} aria-hidden="true"><span /></span>
+      </button>
       <button className="logout" onClick={() => { localStorage.removeItem("perez_session"); setSession(null); }}><LogOut size={18} />Salir</button>
     </aside>
     <section className="workspace">
