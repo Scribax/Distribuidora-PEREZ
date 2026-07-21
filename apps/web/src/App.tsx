@@ -4,6 +4,8 @@ import { useApi } from "./api";
 import { Login } from "./Login";
 import type { Session } from "./types";
 import { BalanceView, ClientsView, CommercialsView, DashboardView, ExpensesView, ProductsView, PurchasesView, QuotesView, RemittancesView, ReportsView, StockView, UpdatesView, UsersView } from "./pages/index";
+import { SyncStatus, OnlinePill } from "./components/SyncStatus";
+import { preloadOfflineData } from "./db/sync";
 
 export default function App() {
   const [session, setSession] = useState<Session | null>(() => {
@@ -28,6 +30,16 @@ export default function App() {
     document.documentElement.dataset.theme = theme;
     localStorage.setItem("perez_theme", theme);
   }, [theme]);
+
+  // ── Precarga de datos offline al iniciar sesión ──────────
+  useEffect(() => {
+    if (!session || !navigator.onLine) return;
+    preloadOfflineData(api).catch(() => {
+      // Silencioso — si falla la precarga, los datos se cachean
+      // en la próxima navegación con internet.
+    });
+  }, [session]);
+
   if (!session) return <Login onLogin={setSession} theme={theme} onToggleTheme={() => setTheme((current) => current === "dark" ? "light" : "dark")} />;
   const nav = [
     ["dashboard", BarChart3, "Dashboard"],
@@ -42,7 +54,7 @@ export default function App() {
     ...(session.user.rol === "CONSULTA" ? [] : [["comerciales", UserCog, "Comerciales"] as const]),
     ["stock", PackagePlus, "Stock"],
     ["actualizaciones", Megaphone, "Novedades"],
-    ...(session.user.rol === "ADMINISTRADOR" ? [["usuarios", UserCog, "Usuarios"] as const] : [])
+    ...(session.user.rol === "ADMINISTRADOR" ? [["usuarios", UserCog, "Usuarios"] as const] : []),
   ] as const;
   const viewHelp: Record<string, string> = {
     dashboard: "Resumen del negocio y accesos rapidos",
@@ -57,7 +69,7 @@ export default function App() {
     comerciales: "Vendedores, cuentas y comisiones",
     stock: "Existencias, minimos y ajustes",
     actualizaciones: "Novedades y mejoras del sistema",
-    usuarios: "Permisos y cuentas del sistema"
+    usuarios: "Permisos y cuentas del sistema",
   };
   const currentLabel = nav.find(([id]) => id === view)?.[2] ?? "Dashboard";
   const maintenance = getMaintenanceStatus();
@@ -65,65 +77,115 @@ export default function App() {
     ["dashboard", BarChart3, "Inicio"],
     ["remitos", ReceiptText, "Ventas"],
     ["clientes", Users, "Clientes"],
-    ["stock", PackagePlus, "Stock"]
+    ["stock", PackagePlus, "Stock"],
   ] as const;
-  return <div className={`app ${navOpen ? "nav-open" : ""}`}>
-    <button type="button" className="mobile-menu-button" onClick={() => setNavOpen(true)} title="Abrir menú"><Menu size={20} />Menú</button>
-    {navOpen && <button type="button" className="nav-scrim" onClick={() => setNavOpen(false)} aria-label="Cerrar menú" />}
-    <aside className={navOpen ? "open" : ""}>
-      <div className="brand"><img src="/brand-logo-optimized.png" alt="Perez Martin Distribuidora" /><button type="button" className="nav-close" onClick={() => setNavOpen(false)} title="Cerrar menú"><X size={18} /></button></div>
-      {nav.map(([id, Icon, label]) => <button key={id} className={view === id ? "active" : ""} onClick={() => { setView(id); setNavOpen(false); }} title={label}><Icon size={18} />{label}</button>)}
-      <button
-        type="button"
-        className="theme-toggle"
-        onClick={() => setTheme((current) => current === "dark" ? "light" : "dark")}
-        title={theme === "dark" ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
-        aria-label={theme === "dark" ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
-        aria-pressed={theme === "dark"}
-      >
-        {theme === "dark" ? <Sun size={17} /> : <Moon size={17} />}
-        <span>{theme === "dark" ? "Claro" : "Oscuro"}</span>
-        <span className={`theme-switch ${theme}`} aria-hidden="true"><span /></span>
+  return (
+    <div className={`app ${navOpen ? "nav-open" : ""}`}>
+      <button type="button" className="mobile-menu-button" onClick={() => setNavOpen(true)} title="Abrir menú">
+        <Menu size={20} />
+        Menú
       </button>
-      <button className="logout" onClick={() => { localStorage.removeItem("perez_session"); setSession(null); }}><LogOut size={18} />Salir</button>
-    </aside>
-    <section className="workspace">
-      <header className="workspace-header">
-        <div>
-          <span className="eyebrow">Distribuidora Perez Martin</span>
-          <h1>{currentLabel}</h1>
-          <p>{viewHelp[view]}</p>
+      {navOpen && <button type="button" className="nav-scrim" onClick={() => setNavOpen(false)} aria-label="Cerrar menú" />}
+      <aside className={navOpen ? "open" : ""}>
+        <div className="brand">
+          <img src="/brand-logo-optimized.png" alt="Perez Martin Distribuidora" />
+          <button type="button" className="nav-close" onClick={() => setNavOpen(false)} title="Cerrar menú">
+            <X size={18} />
+          </button>
         </div>
-        <div className="workspace-actions">
-          <span className={`maintenance-pill ${maintenance.daysLeft <= 3 ? "soon" : ""}`} title={`Próximo mantenimiento: ${maintenance.dueFull}`}>
-            <CalendarClock size={16} />
-            <span>Mantenimiento</span>
-            <strong>{maintenance.shortText}</strong>
+        {nav.map(([id, Icon, label]) => (
+          <button
+            key={id}
+            className={view === id ? "active" : ""}
+            onClick={() => {
+              setView(id);
+              setNavOpen(false);
+            }}
+            title={label}
+          >
+            <Icon size={18} />
+            {label}
+          </button>
+        ))}
+        <button
+          type="button"
+          className="theme-toggle"
+          onClick={() => setTheme((current) => (current === "dark" ? "light" : "dark"))}
+          title={theme === "dark" ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
+          aria-label={theme === "dark" ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
+          aria-pressed={theme === "dark"}
+        >
+          {theme === "dark" ? <Sun size={17} /> : <Moon size={17} />}
+          <span>{theme === "dark" ? "Claro" : "Oscuro"}</span>
+          <span className={`theme-switch ${theme}`} aria-hidden="true">
+            <span />
           </span>
-          <span className="user-pill">{session.user.nombre} · {session.user.rol}</span>
-        </div>
-      </header>
-      {view === "dashboard" && <DashboardView api={api} onNavigate={setView} />}
-      {view === "productos" && <ProductsView api={api} canWrite={session.user.rol !== "CONSULTA"} isAdmin={session.user.rol === "ADMINISTRADOR"} />}
-      {view === "clientes" && <ClientsView api={api} canWrite={session.user.rol !== "CONSULTA"} canEditBalance={session.user.rol === "ADMINISTRADOR"} />}
-      {view === "compras" && <PurchasesView api={api} canWrite={session.user.rol !== "CONSULTA"} isAdmin={session.user.rol === "ADMINISTRADOR"} />}
-      {view === "remitos" && <RemittancesView api={api} canWrite={session.user.rol !== "CONSULTA"} isAdmin={session.user.rol === "ADMINISTRADOR"} />}
-      {view === "cotizaciones" && <QuotesView api={api} canWrite={session.user.rol !== "CONSULTA"} />}
-      {view === "gastos" && <ExpensesView api={api} isAdmin={session.user.rol === "ADMINISTRADOR"} />}
-      {view === "balance" && <BalanceView api={api} />}
-      {view === "informes" && <ReportsView api={api} />}
-      {view === "comerciales" && <CommercialsView api={api} isAdmin={session.user.rol === "ADMINISTRADOR"} canWrite={session.user.rol !== "CONSULTA"} />}
-      {view === "stock" && <StockView api={api} isAdmin={session.user.rol === "ADMINISTRADOR"} />}
-      {view === "actualizaciones" && <UpdatesView />}
-      {view === "usuarios" && <UsersView api={api} />}
-    </section>
-    <nav className="mobile-bottom-nav" aria-label="Accesos rápidos">
-      {bottomNav.map(([id, Icon, label]) => <button key={id} type="button" className={view === id ? "active" : ""} onClick={() => { setView(id); setNavOpen(false); }}>
-        <Icon size={20} />
-        <span>{label}</span>
-      </button>)}
-    </nav>
-  </div>;
+        </button>
+        <button
+          className="logout"
+          onClick={() => {
+            localStorage.removeItem("perez_session");
+            setSession(null);
+          }}
+        >
+          <LogOut size={18} />
+          Salir
+        </button>
+      </aside>
+      <section className="workspace">
+        <header className="workspace-header">
+          <div>
+            <span className="eyebrow">Distribuidora Perez Martin</span>
+            <h1>{currentLabel}</h1>
+            <p>{viewHelp[view]}</p>
+          </div>
+          <div className="workspace-actions">
+            <OnlinePill />
+            <span className={`maintenance-pill ${maintenance.daysLeft <= 3 ? "soon" : ""}`} title={`Próximo mantenimiento: ${maintenance.dueFull}`}>
+              <CalendarClock size={16} />
+              <span>Mantenimiento</span>
+              <strong>{maintenance.shortText}</strong>
+            </span>
+            <span className="user-pill">
+              {session.user.nombre} · {session.user.rol}
+            </span>
+          </div>
+        </header>
+        {view === "dashboard" && <DashboardView api={api} onNavigate={setView} />}
+        {view === "productos" && <ProductsView api={api} canWrite={session.user.rol !== "CONSULTA"} isAdmin={session.user.rol === "ADMINISTRADOR"} />}
+        {view === "clientes" && <ClientsView api={api} canWrite={session.user.rol !== "CONSULTA"} canEditBalance={session.user.rol === "ADMINISTRADOR"} />}
+        {view === "compras" && <PurchasesView api={api} canWrite={session.user.rol !== "CONSULTA"} isAdmin={session.user.rol === "ADMINISTRADOR"} />}
+        {view === "remitos" && <RemittancesView api={api} canWrite={session.user.rol !== "CONSULTA"} isAdmin={session.user.rol === "ADMINISTRADOR"} />}
+        {view === "cotizaciones" && <QuotesView api={api} canWrite={session.user.rol !== "CONSULTA"} />}
+        {view === "gastos" && <ExpensesView api={api} isAdmin={session.user.rol === "ADMINISTRADOR"} />}
+        {view === "balance" && <BalanceView api={api} />}
+        {view === "informes" && <ReportsView api={api} />}
+        {view === "comerciales" && <CommercialsView api={api} isAdmin={session.user.rol === "ADMINISTRADOR"} canWrite={session.user.rol !== "CONSULTA"} />}
+        {view === "stock" && <StockView api={api} isAdmin={session.user.rol === "ADMINISTRADOR"} />}
+        {view === "actualizaciones" && <UpdatesView />}
+        {view === "usuarios" && <UsersView api={api} />}
+      </section>
+      <nav className="mobile-bottom-nav" aria-label="Accesos rápidos">
+        {bottomNav.map(([id, Icon, label]) => (
+          <button
+            key={id}
+            type="button"
+            className={view === id ? "active" : ""}
+            onClick={() => {
+              setView(id);
+              setNavOpen(false);
+            }}
+          >
+            <Icon size={20} />
+            <span>{label}</span>
+          </button>
+        ))}
+      </nav>
+
+      {/* Indicador de conectividad */}
+      <SyncStatus />
+    </div>
+  );
 }
 
 function getMaintenanceStatus() {

@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import type { Session } from "./types";
+import { getCachedFallback } from "./db/sync";
 
 export const API = import.meta.env.VITE_API_URL ?? "http://localhost:4000/api";
 
@@ -28,7 +29,7 @@ export function useApi(session: Session | null, setSession: (s: Session | null) 
       const refreshed = await fetch(`${API}/auth/refresh`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ refreshToken: session.refreshToken })
+        body: JSON.stringify({ refreshToken: session.refreshToken }),
       });
       if (refreshed.status === 401 || refreshed.status === 403) return null;
       if (!refreshed.ok) throw await parseError(refreshed);
@@ -39,22 +40,48 @@ export function useApi(session: Session | null, setSession: (s: Session | null) 
     };
 
     return async (path: string, init: RequestInit = {}) => {
-      const run = async (token?: string) => fetch(`${API}${path}`, {
-        ...init,
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          ...init.headers
+      const run = async (token?: string) =>
+        fetch(`${API}${path}`, {
+          ...init,
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            ...init.headers,
+          },
+        });
+
+      const isRead = !init.method || init.method === "GET";
+
+      let res: Response;
+      try {
+        res = await run(session?.accessToken);
+      } catch (_err) {
+        // Error de red — intentar caché local para lecturas
+        if (isRead) {
+          const cached = await getCachedFallback(path);
+          if (cached !== null) return cached;
         }
-      });
-      let res = await run(session?.accessToken);
+        // Si no hay caché o es una escritura, avisar
+        throw { message: "Sin conexión. Conectate a internet para continuar." };
+      }
+
       if (res.status === 401 && session?.refreshToken) {
         refreshing ??= doRefresh();
-        const next = await refreshing.finally(() => { refreshing = null; });
+        const next = await refreshing.finally(() => {
+          refreshing = null;
+        });
         if (next) {
           setSession(next);
           localStorage.setItem("perez_session", JSON.stringify(next));
-          res = await run(next.accessToken);
+          try {
+            res = await run(next.accessToken);
+          } catch (_err) {
+            if (isRead) {
+              const cached = await getCachedFallback(path);
+              if (cached !== null) return cached;
+            }
+            throw { message: "Sin conexión. Conectate a internet para continuar." };
+          }
         } else {
           setSession(null);
           localStorage.removeItem("perez_session");
