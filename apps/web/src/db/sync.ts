@@ -9,8 +9,7 @@ import {
   getCachedCategories,
   getCachedVendors,
   getCachedDashboard,
-  getLastSync,
-} from "../db/index";
+} from "./index";
 
 // ── Pre-carga ──────────────────────────────────────────────
 
@@ -19,8 +18,6 @@ import {
 export async function preloadOfflineData(
   api: (path: string, init?: RequestInit) => Promise<any>
 ) {
-  // Disparamos todas las requests en paralelo (silenciamos errores
-  // individuales para que si una falla no bloquee al resto).
   const results = await Promise.allSettled([
     api("/productos?limit=5000").catch(() => null),
     api("/clientes?limit=5000").catch(() => null),
@@ -33,22 +30,25 @@ export async function preloadOfflineData(
 
   const ops: Promise<void>[] = [];
 
+  // La API devuelve { items, total, page, pageSize } para colecciones paginadas
   if (productos.status === "fulfilled" && productos.value) {
-    const data = Array.isArray(productos.value) ? productos.value : productos.value.data ?? [];
-    ops.push(cacheProducts(data));
+    const items = productos.value.items ?? [];
+    ops.push(cacheProducts(items));
   }
   if (clientes.status === "fulfilled" && clientes.value) {
-    const data = Array.isArray(clientes.value) ? clientes.value : clientes.value.data ?? [];
-    ops.push(cacheClients(data));
+    const items = clientes.value.items ?? [];
+    ops.push(cacheClients(items));
   }
+  // categorias y vendedores devuelven array directo
   if (categorias.status === "fulfilled" && categorias.value) {
-    const data = Array.isArray(categorias.value) ? categorias.value : categorias.value.data ?? [];
+    const data = Array.isArray(categorias.value) ? categorias.value : [];
     ops.push(cacheCategories(data));
   }
   if (vendedores.status === "fulfilled" && vendedores.value) {
-    const data = Array.isArray(vendedores.value) ? vendedores.value : vendedores.value.data ?? [];
+    const data = Array.isArray(vendedores.value) ? vendedores.value : [];
     ops.push(cacheVendors(data));
   }
+  // dashboard devuelve el objeto directo
   if (dashboard.status === "fulfilled" && dashboard.value) {
     ops.push(cacheDashboard(dashboard.value));
   }
@@ -58,39 +58,24 @@ export async function preloadOfflineData(
 
 // ── Helpers para api.ts ────────────────────────────────────
 
-interface CacheFallbackMap {
-  "/productos": () => Promise<any>;
-  "/clientes": () => Promise<any>;
-  "/categorias": () => Promise<any>;
-  "/vendedores": () => Promise<any>;
-  "/dashboard": () => Promise<any>;
-}
-
-/** Mapa de rutas GET → función que devuelve datos cacheados. */
+/** Mapa de rutas GET → función que devuelve datos cacheados con la
+ *  MISMA forma que la API real para que las vistas no se rompan. */
 const cacheMap: Record<string, () => Promise<any>> = {
   productos: async () => {
-    const data = await getCachedProducts();
-    return { data, total: data.length };
+    const items = await getCachedProducts();
+    return { items, total: items.length, page: 1, pageSize: items.length };
   },
   clientes: async () => {
-    const data = await getCachedClients();
-    return { data, total: data.length };
+    const items = await getCachedClients();
+    return { items, total: items.length, page: 1, pageSize: items.length };
   },
-  categorias: async () => {
-    const data = await getCachedCategories();
-    return { data, total: data.length };
-  },
-  vendedores: async () => {
-    const data = await getCachedVendors();
-    return { data, total: data.length };
-  },
-  dashboard: getCachedDashboard,
+  categorias: getCachedCategories,        // API devuelve array directo
+  vendedores: getCachedVendors,           // API devuelve array directo
+  dashboard: getCachedDashboard,          // API devuelve objeto directo
 };
 
-/** Intenta servir desde caché según la ruta. Devuelve null si no hay caché
- *  disponible para esa ruta. */
+/** Intenta servir desde caché según la ruta. Devuelve null si no hay caché. */
 export async function getCachedFallback(path: string): Promise<any | null> {
-  // Extraer la primera parte de la ruta: "/productos/123" → "productos"
   const base = path.replace(/^\/+/, "").split("/")[0].split("?")[0];
   const fn = cacheMap[base];
   if (!fn) return null;
