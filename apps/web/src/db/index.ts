@@ -1,19 +1,18 @@
 import Dexie, { type EntityTable } from "dexie";
 
-// ── Tipos para los datos cacheados ──────────────────────────
-
 export interface CachedProduct {
   id: string;
   codigoInterno: string;
   nombre: string;
-  categoriaId: string;
-  categoriaNombre: string;
-  precioMayorista: number;
-  precioMinorista: number;
-  costo: number;
+  categoriaId?: string;
+  categoria?: { id?: string; nombre: string };
+  precioMayorista: string | number;
+  precioMinorista: string | number;
+  costo: string | number;
   stockActual: number;
   stockMinimo: number;
   activo: boolean;
+  movimientos?: any[];
 }
 
 export interface CachedClient {
@@ -23,8 +22,12 @@ export interface CachedClient {
   direccion?: string;
   telefono?: string;
   email?: string;
-  saldoPendiente: number;
+  observaciones?: string;
+  saldoPendiente: string | number;
   activo: boolean;
+  remitos?: any[];
+  pagos?: any[];
+  historialImportado?: any[];
 }
 
 export interface CachedCategory {
@@ -36,41 +39,34 @@ export interface CachedCategory {
 export interface CachedVendor {
   id: string;
   nombre: string;
-  porcentajeComision: number;
+  porcentajeComision: string | number;
   activo: boolean;
 }
 
 export interface CachedDashboard {
   ventasMes: number;
   comprasMes: number;
-  balanceMes: number;
-  valorStock: number;
-  stockBajo: Array<{
-    id: string;
-    nombre: string;
-    stockActual: number;
-    stockMinimo: number;
-  }>;
-  ultimosRemitos: Array<{
-    numero: number;
-    cliente: string;
-    fecha: string;
-    total: number;
-    estado: string;
-  }>;
-  grafico: Array<{
-    mes: string;
-    ventas: number;
-    compras: number;
-  }>;
+  costoVendidoMes?: number;
+  gastosMes?: number;
+  gananciaBrutaMes?: number;
+  balanceMes?: number;
+  valorStock?: number;
+  stockBajo: any[];
+  ultimosRemitos: any[];
+  chart: any[];
+}
+
+export interface ApiCacheEntry {
+  key: string;
+  path: string;
+  data: any;
+  lastSync: number;
 }
 
 export interface SyncMeta {
   collection: string;
-  lastSync: number; // Date.now()
+  lastSync: number;
 }
-
-// ── Base de datos Dexie ─────────────────────────────────────
 
 const db = new Dexie("perez_offline") as Dexie & {
   productos: EntityTable<CachedProduct, "id">;
@@ -78,6 +74,7 @@ const db = new Dexie("perez_offline") as Dexie & {
   categorias: EntityTable<CachedCategory, "id">;
   vendedores: EntityTable<CachedVendor, "id">;
   dashboard: EntityTable<CachedDashboard & { _id: string }, "_id">;
+  apiCache: EntityTable<ApiCacheEntry, "key">;
   syncMeta: EntityTable<SyncMeta, "collection">;
 };
 
@@ -90,61 +87,98 @@ db.version(1).stores({
   syncMeta: "collection",
 });
 
-// ── Operaciones de caché ────────────────────────────────────
+db.version(2).stores({
+  productos: "id, codigoInterno, nombre, categoriaId, activo",
+  clientes: "id, nombre, activo",
+  categorias: "id, nombre, activo",
+  vendedores: "id, nombre, activo",
+  dashboard: "_id",
+  apiCache: "key, path, lastSync",
+  syncMeta: "collection",
+});
 
-/** Reemplaza toda la colección de productos en la caché local. */
+async function markSynced(collection: string) {
+  await db.syncMeta.put({ collection, lastSync: Date.now() });
+}
+
+export function normalizeApiCacheKey(path: string, scope = "global") {
+  const [pathname, query = ""] = path.split("?");
+  const normalizedPath = pathname.startsWith("/") ? pathname : `/${pathname}`;
+  if (!query) return `${scope}:${normalizedPath}`;
+  const params = new URLSearchParams(query);
+  const sorted = new URLSearchParams();
+  Array.from(params.keys()).sort().forEach((key) => {
+    for (const value of params.getAll(key)) sorted.append(key, value);
+  });
+  const qs = sorted.toString();
+  return `${scope}:${qs ? `${normalizedPath}?${qs}` : normalizedPath}`;
+}
+
+export async function cacheApiResponse(path: string, data: any, scope = "global") {
+  const key = normalizeApiCacheKey(path, scope);
+  await db.apiCache.put({ key, path, data, lastSync: Date.now() });
+  await markSynced(`api:${key}`);
+}
+
+export async function getCachedApiResponse(path: string, scope = "global") {
+  const entry = await db.apiCache.get(normalizeApiCacheKey(path, scope));
+  return entry?.data ?? null;
+}
+
 export async function cacheProducts(products: CachedProduct[]) {
   await db.transaction("rw", db.productos, async () => {
     await db.productos.clear();
-    await db.productos.bulkAdd(products);
+    if (products.length) await db.productos.bulkPut(products);
   });
-  await db.syncMeta.put({ collection: "productos", lastSync: Date.now() });
+  await markSynced("productos");
 }
 
-/** Reemplaza toda la colección de clientes en la caché local. */
 export async function cacheClients(clients: CachedClient[]) {
   await db.transaction("rw", db.clientes, async () => {
     await db.clientes.clear();
-    await db.clientes.bulkAdd(clients);
+    if (clients.length) await db.clientes.bulkPut(clients);
   });
-  await db.syncMeta.put({ collection: "clientes", lastSync: Date.now() });
+  await markSynced("clientes");
 }
 
-/** Reemplaza las categorías en caché. */
 export async function cacheCategories(categories: CachedCategory[]) {
   await db.transaction("rw", db.categorias, async () => {
     await db.categorias.clear();
-    await db.categorias.bulkAdd(categories);
+    if (categories.length) await db.categorias.bulkPut(categories);
   });
-  await db.syncMeta.put({ collection: "categorias", lastSync: Date.now() });
+  await markSynced("categorias");
 }
 
-/** Reemplaza los vendedores en caché. */
 export async function cacheVendors(vendors: CachedVendor[]) {
   await db.transaction("rw", db.vendedores, async () => {
     await db.vendedores.clear();
-    await db.vendedores.bulkAdd(vendors);
+    if (vendors.length) await db.vendedores.bulkPut(vendors);
   });
-  await db.syncMeta.put({ collection: "vendedores", lastSync: Date.now() });
+  await markSynced("vendedores");
 }
 
-/** Guarda el snapshot del dashboard. */
 export async function cacheDashboard(data: CachedDashboard) {
   await db.transaction("rw", db.dashboard, async () => {
     await db.dashboard.clear();
     await db.dashboard.add({ ...data, _id: "snapshot" });
   });
-  await db.syncMeta.put({ collection: "dashboard", lastSync: Date.now() });
+  await markSynced("dashboard");
 }
-
-// ── Lecturas ────────────────────────────────────────────────
 
 export async function getCachedProducts() {
   return db.productos.toArray();
 }
 
+export async function getCachedProduct(id: string) {
+  return (await db.productos.get(id)) ?? null;
+}
+
 export async function getCachedClients() {
   return db.clientes.toArray();
+}
+
+export async function getCachedClient(id: string) {
+  return (await db.clientes.get(id)) ?? null;
 }
 
 export async function getCachedCategories() {
@@ -155,8 +189,15 @@ export async function getCachedVendors() {
   return db.vendedores.toArray();
 }
 
+export async function getCachedVendor(id: string) {
+  return (await db.vendedores.get(id)) ?? null;
+}
+
 export async function getCachedDashboard() {
-  return (await db.dashboard.get("snapshot")) ?? null;
+  const data = await db.dashboard.get("snapshot");
+  if (!data) return null;
+  const { _id, ...snapshot } = data;
+  return snapshot;
 }
 
 export async function getLastSync(collection: string) {
@@ -164,10 +205,8 @@ export async function getLastSync(collection: string) {
   return meta?.lastSync ?? 0;
 }
 
-/** Verdadero si hay al menos datos de productos cacheados (el offline funciona). */
 export async function hasOfflineData() {
-  const count = await db.productos.count();
-  return count > 0;
+  return (await db.productos.count()) > 0;
 }
 
 export { db };

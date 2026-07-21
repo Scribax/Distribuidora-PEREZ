@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import type { Session } from "./types";
-import { getCachedFallback } from "./db/sync";
+import { getCachedFallback, cacheSuccessfulGet, isCacheablePath } from "./db/sync";
 
 export const API = import.meta.env.VITE_API_URL ?? "http://localhost:4000/api";
 
@@ -51,6 +51,7 @@ export function useApi(session: Session | null, setSession: (s: Session | null) 
         });
 
       const isRead = !init.method || init.method === "GET";
+      const cacheScope = session?.user ? `${session.user.id}:${session.user.rol}` : "anonymous";
 
       let res: Response;
       try {
@@ -58,7 +59,7 @@ export function useApi(session: Session | null, setSession: (s: Session | null) 
       } catch (_err) {
         // Error de red — intentar caché local para lecturas
         if (isRead) {
-          const cached = await getCachedFallback(path);
+          const cached = await getCachedFallback(path, cacheScope);
           if (cached != null) return cached;
         }
         // Si no hay caché o es una escritura, avisar
@@ -77,7 +78,7 @@ export function useApi(session: Session | null, setSession: (s: Session | null) 
             res = await run(next.accessToken);
           } catch (_err) {
             if (isRead) {
-              const cached = await getCachedFallback(path);
+              const cached = await getCachedFallback(path, cacheScope);
               if (cached != null) return cached;
             }
             throw { message: "Sin conexión. Conectate a internet para continuar." };
@@ -91,7 +92,9 @@ export function useApi(session: Session | null, setSession: (s: Session | null) 
       if (res.status === 204) return null;
       const contentType = res.headers.get("content-type") ?? "";
       if (contentType.includes("application/pdf") || contentType.includes("spreadsheet")) return res.blob();
-      return res.json();
+      const data = await res.json();
+      if (isRead && isCacheablePath(path)) cacheSuccessfulGet(path, data, cacheScope).catch(() => undefined);
+      return data;
     };
   }, [session, setSession]);
 }
