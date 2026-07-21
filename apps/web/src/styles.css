@@ -7524,6 +7524,9 @@ body:has(.modal-backdrop) {
 .balance-metrics-v2 .metric-icon {
   display: grid;
   place-items: center;
+  grid-column: 2;
+  grid-row: 1;
+  justify-self: end;
   width: 38px;
   height: 38px;
   border-radius: 11px;
