@@ -68,6 +68,22 @@ export interface SyncMeta {
   lastSync: number;
 }
 
+export interface OfflineOperationRecord {
+  id: string;
+  type: string;
+  method: string;
+  path: string;
+  body: any;
+  preview?: any;
+  scope: string;
+  status: string;
+  attempts: number;
+  error?: string;
+  createdAt: number;
+  updatedAt: number;
+  syncedAt?: number;
+}
+
 const db = new Dexie("perez_offline") as Dexie & {
   productos: EntityTable<CachedProduct, "id">;
   clientes: EntityTable<CachedClient, "id">;
@@ -75,6 +91,7 @@ const db = new Dexie("perez_offline") as Dexie & {
   vendedores: EntityTable<CachedVendor, "id">;
   dashboard: EntityTable<CachedDashboard & { _id: string }, "_id">;
   apiCache: EntityTable<ApiCacheEntry, "key">;
+  offlineOperations: EntityTable<OfflineOperationRecord, "id">;
   syncMeta: EntityTable<SyncMeta, "collection">;
 };
 
@@ -94,6 +111,17 @@ db.version(2).stores({
   vendedores: "id, nombre, activo",
   dashboard: "_id",
   apiCache: "key, path, lastSync",
+  syncMeta: "collection",
+});
+
+db.version(3).stores({
+  productos: "id, codigoInterno, nombre, categoriaId, activo",
+  clientes: "id, nombre, activo",
+  categorias: "id, nombre, activo",
+  vendedores: "id, nombre, activo",
+  dashboard: "_id",
+  apiCache: "key, path, lastSync",
+  offlineOperations: "id, scope, status, createdAt, updatedAt",
   syncMeta: "collection",
 });
 

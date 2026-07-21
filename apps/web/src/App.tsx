@@ -6,6 +6,7 @@ import type { Session } from "./types";
 import { BalanceView, ClientsView, CommercialsView, DashboardView, ExpensesView, ProductsView, PurchasesView, QuotesView, RemittancesView, ReportsView, StockView, UpdatesView, UsersView } from "./pages/index";
 import { SyncStatus, OnlinePill } from "./components/SyncStatus";
 import { preloadOfflineData } from "./db/sync";
+import { useOfflineQueue } from "./hooks/useOfflineQueue";
 
 export default function App() {
   const [session, setSession] = useState<Session | null>(() => {
@@ -26,6 +27,7 @@ export default function App() {
   const [view, setView] = useState("dashboard");
   const [navOpen, setNavOpen] = useState(false);
   const api = useApi(session, setSession);
+  const offlineQueue = useOfflineQueue(session);
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     localStorage.setItem("perez_theme", theme);
@@ -140,7 +142,7 @@ export default function App() {
             <p>{viewHelp[view]}</p>
           </div>
           <div className="workspace-actions">
-            <OnlinePill />
+            <OnlinePill pending={offlineQueue.pending} conflicts={offlineQueue.conflicts} syncing={offlineQueue.syncing} />
             <span className={`maintenance-pill ${maintenance.daysLeft <= 3 ? "soon" : ""}`} title={`Próximo mantenimiento: ${maintenance.dueFull}`}>
               <CalendarClock size={16} />
               <span>Mantenimiento</span>
@@ -155,7 +157,7 @@ export default function App() {
         {view === "productos" && <ProductsView api={api} canWrite={session.user.rol !== "CONSULTA"} isAdmin={session.user.rol === "ADMINISTRADOR"} />}
         {view === "clientes" && <ClientsView api={api} canWrite={session.user.rol !== "CONSULTA"} canEditBalance={session.user.rol === "ADMINISTRADOR"} />}
         {view === "compras" && <PurchasesView api={api} canWrite={session.user.rol !== "CONSULTA"} isAdmin={session.user.rol === "ADMINISTRADOR"} />}
-        {view === "remitos" && <RemittancesView api={api} canWrite={session.user.rol !== "CONSULTA"} isAdmin={session.user.rol === "ADMINISTRADOR"} />}
+        {view === "remitos" && <RemittancesView api={api} canWrite={session.user.rol !== "CONSULTA"} isAdmin={session.user.rol === "ADMINISTRADOR"} offlineScope={offlineQueue.scope} />}
         {view === "cotizaciones" && <QuotesView api={api} canWrite={session.user.rol !== "CONSULTA"} />}
         {view === "gastos" && <ExpensesView api={api} isAdmin={session.user.rol === "ADMINISTRADOR"} />}
         {view === "balance" && <BalanceView api={api} />}
@@ -183,7 +185,7 @@ export default function App() {
       </nav>
 
       {/* Indicador de conectividad */}
-      <SyncStatus />
+      <SyncStatus pending={offlineQueue.pending} conflicts={offlineQueue.conflicts} syncing={offlineQueue.syncing} onSync={offlineQueue.syncNow} />
     </div>
   );
 }

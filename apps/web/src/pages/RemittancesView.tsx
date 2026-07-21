@@ -5,10 +5,11 @@ import type { Client, LineItem, Product, Supplier, User, Vendor, Dashboard } fro
 import { confirmAction, dateInput, expenseLabel, formatDate, formatMovementRow, formatPurchaseRow, formatRemitoItemRow, formatRemitoRow, itemPrice, money, movementLabel, openPdfViewer, payload, qs, referenceLabel, remitoPending } from "../utils";
 import { Metric, Row, Table, SearchBox } from "../components/ui";
 import { EntityPicker, ItemList, ProductPicker } from "../components/pickers";
+import { enqueuePendingRemito, listOfflineOperations, retryOfflineOperation, discardOfflineOperation, type OfflineOperation } from "../db/offlineQueue";
 
 const REMITOS_PAGE_SIZE = 10;
 
-export function RemittancesView({ api, canWrite, isAdmin }: { api: ReturnType<typeof useApi>; canWrite: boolean; isAdmin: boolean }) {
+export function RemittancesView({ api, canWrite, isAdmin, offlineScope }: { api: ReturnType<typeof useApi>; canWrite: boolean; isAdmin: boolean; offlineScope: string }) {
   const [remitos, setRemitos] = useState<any[]>([]);
   const [page, setPage] = useState(1);
   const [totalRemitos, setTotalRemitos] = useState(0);
@@ -28,6 +29,14 @@ export function RemittancesView({ api, canWrite, isAdmin }: { api: ReturnType<ty
   const [error, setError] = useState("");
   const [savingEdit, setSavingEdit] = useState(false);
   const [editSaved, setEditSaved] = useState(false);
+  const [offlineRows, setOfflineRows] = useState<OfflineOperation[]>([]);
+  const loadOfflineRows = () => listOfflineOperations(offlineScope).then((rows) => setOfflineRows(rows as OfflineOperation[]));
+  useEffect(() => {
+    loadOfflineRows().catch(() => undefined);
+    const refresh = () => loadOfflineRows().catch(() => undefined);
+    window.addEventListener("perez-offline-queue-changed", refresh);
+    return () => window.removeEventListener("perez-offline-queue-changed", refresh);
+  }, [offlineScope]);
   const load = (next = filters, nextPage = page): Promise<void> => Promise.all([
     api(`/remitos?${qs({ ...next, page: nextPage, pageSize: REMITOS_PAGE_SIZE })}`),
     api("/productos?estado=ACTIVO&pageSize=1000"),
@@ -144,20 +153,21 @@ export function RemittancesView({ api, canWrite, isAdmin }: { api: ReturnType<ty
     const form = payload(formEl);
     setError("");
     if (!remitoItems.length) return setError("Agregá al menos un producto a la boleta.");
+    const body = {
+      clienteId: form.clienteId,
+      vendedorId: form.vendedorId || null,
+      listaPrecios: priceList,
+      pagoEstado: form.pagoEstado,
+      metodoPago: form.metodoPago || null,
+      montoPagado: Number(form.montoPagado ?? 0),
+      descuentoPorcentaje: Number(form.descuentoPorcentaje ?? 0),
+      fecha: form.fecha,
+      items: remitoItems.map((item) => ({ productoId: item.product.id, cantidad: item.cantidad }))
+    };
     try {
       await api("/remitos", {
         method: "POST",
-        body: JSON.stringify({
-          clienteId: form.clienteId,
-          vendedorId: form.vendedorId || null,
-          listaPrecios: priceList,
-          pagoEstado: form.pagoEstado,
-          metodoPago: form.metodoPago || null,
-          montoPagado: Number(form.montoPagado ?? 0),
-          descuentoPorcentaje: Number(form.descuentoPorcentaje ?? 0),
-          fecha: form.fecha,
-          items: remitoItems.map((item) => ({ productoId: item.product.id, cantidad: item.cantidad }))
-        })
+        body: JSON.stringify(body)
       });
       formEl.reset();
       setRemitoItems([]);
@@ -166,6 +176,24 @@ export function RemittancesView({ api, canWrite, isAdmin }: { api: ReturnType<ty
       setSelectedVendorId("");
       await load(filters, 1);
     } catch (err: any) {
+      if (!navigator.onLine || String(err?.message ?? "").includes("Sin conexión")) {
+        const client = clients.find((c) => c.id === body.clienteId);
+        const vendor = vendors.find((v) => v.id === body.vendedorId);
+        await enqueuePendingRemito(body, {
+          cliente: client?.nombre ?? "Cliente",
+          vendedor: vendor?.nombre ?? "Sin vendedor",
+          fecha: String(body.fecha),
+          total,
+          items: remitoItems.map((item) => ({ nombre: item.product.nombre, cantidad: item.cantidad }))
+        }, offlineScope);
+        formEl.reset();
+        setRemitoItems([]);
+        setDescuentoPorcentaje(0);
+        setSelectedClientId("");
+        setSelectedVendorId("");
+        setError("Boleta guardada en este equipo. Se enviará automáticamente cuando vuelva internet.");
+        return;
+      }
       setError(err.message ?? "No se pudo crear la boleta");
     }
   }
@@ -198,6 +226,22 @@ export function RemittancesView({ api, canWrite, isAdmin }: { api: ReturnType<ty
         <Metric label="Cobrado en página" value={money(totals.paid)} />
         <Metric label="Pendiente en página" value={money(Math.max(totals.pending, 0))} />
       </div>
+      {offlineRows.length > 0 && <section className="panel">
+        <h2>Boletas pendientes de enviar</h2>
+        <p className="muted">Estas boletas se guardaron en este equipo y se enviarán solas cuando vuelva internet.</p>
+        <div className="stack">
+          {offlineRows.map((row) => <div key={row.id} className="line-item">
+            <div>
+              <strong>{row.preview?.cliente ?? "Cliente"} · {money(row.preview?.total ?? 0)}</strong>
+              <span>{row.status === "conflict" ? `Conflicto: ${row.error ?? "revisar"}` : `Pendiente · ${row.preview?.items?.length ?? 0} producto(s)`}</span>
+            </div>
+            {row.status === "conflict" && <div style={{ display: "flex", gap: 8 }}>
+              <button type="button" className="secondary" onClick={() => retryOfflineOperation(row.id)}>Reintentar</button>
+              <button type="button" className="secondary" onClick={() => discardOfflineOperation(row.id)}>Descartar</button>
+            </div>}
+          </div>)}
+        </div>
+      </section>}
       <section className="panel sales-list-panel">
         <div className="detail-head sales-head"><div><h2>Boletas emitidas</h2><span>Buscá, revisá estado y abrí el detalle sin pelearte con una tabla enorme.</span></div>{canWrite && <button type="button" onClick={() => document.getElementById("crear-boleta")?.scrollIntoView({ behavior: "smooth", block: "start" })}>Crear boleta</button>}</div>
         <form className="filters sales-filters" onSubmit={(e) => { e.preventDefault(); setPage(1); load(filters, 1); }}>
