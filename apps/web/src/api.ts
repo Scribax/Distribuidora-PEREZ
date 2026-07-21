@@ -59,7 +59,7 @@ export function useApi(session: Session | null, setSession: (s: Session | null) 
         // Error de red — intentar caché local para lecturas
         if (isRead) {
           const cached = await getCachedFallback(path);
-          if (cached !== null) return cached;
+          if (cached != null) return cached;
         }
         // Si no hay caché o es una escritura, avisar
         throw { message: "Sin conexión. Conectate a internet para continuar." };
@@ -78,7 +78,7 @@ export function useApi(session: Session | null, setSession: (s: Session | null) 
           } catch (_err) {
             if (isRead) {
               const cached = await getCachedFallback(path);
-              if (cached !== null) return cached;
+              if (cached != null) return cached;
             }
             throw { message: "Sin conexión. Conectate a internet para continuar." };
           }

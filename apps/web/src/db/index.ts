@@ -156,7 +156,7 @@ export async function getCachedVendors() {
 }
 
 export async function getCachedDashboard() {
-  return db.dashboard.get("snapshot");
+  return (await db.dashboard.get("snapshot")) ?? null;
 }
 
 export async function getLastSync(collection: string) {
