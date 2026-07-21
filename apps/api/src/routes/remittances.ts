@@ -80,9 +80,31 @@ remittancesRouter.get("/:id", async (req, res) => {
   res.json(remito);
 });
 
+// Lee y valida el header de idempotencia. La clave (el id de la operación
+// offline local) permite que un reintento del mismo POST no cree una boleta
+// duplicada cuando la respuesta original se perdió en la red.
+function idempotencyKeyFrom(req: { header(name: string): string | undefined }) {
+  const raw = req.header("Idempotency-Key");
+  if (!raw) return null;
+  const key = raw.trim();
+  if (!key || key.length > 200) return null;
+  return key;
+}
+
 remittancesRouter.post("/", requireRoles(Rol.ADMINISTRADOR, Rol.EMPLEADO), async (req, res) => {
+  const idempotencyKey = idempotencyKeyFrom(req);
+  if (idempotencyKey) {
+    // Reintento secuencial (el caso común: el POST llegó, la respuesta se
+    // perdió, el cliente reintenta). Devolvemos la respuesta ya guardada.
+    const existing = await prisma.idempotencyKey.findUnique({ where: { key: idempotencyKey } });
+    if (existing) {
+      if (existing.usuarioId !== req.user!.id) fail(409, "IDEMPOTENCY_CONFLICTO", "La clave de idempotencia pertenece a otra operación");
+      return res.status(existing.statusCode).json(existing.response);
+    }
+  }
   const input = remitoSchema.parse(req.body);
-  const remito = await prisma.$transaction(async (tx) => {
+  try {
+    const remito = await prisma.$transaction(async (tx) => {
     const cliente = await tx.cliente.findUnique({ where: { id: input.clienteId } });
     if (!cliente) fail(404, "CLIENTE_NO_ENCONTRADO", "Cliente no encontrado");
     if (!cliente.activo) fail(422, "CLIENTE_INACTIVO", "El cliente está inactivo");
@@ -163,9 +185,33 @@ remittancesRouter.post("/", requireRoles(Rol.ADMINISTRADOR, Rol.EMPLEADO), async
       descripcion: `Emitió boleta #${created.numero} para ${created.cliente.nombre}`,
       cambios: { despues: created, deudaAgregada: pendingDebt }
     }, tx);
-    return created;
-  });
-  res.status(201).json(remito);
+      // Guardamos la clave dentro de la misma transacción: el PK único garantiza
+      // que dos requests concurrentes con la misma clave no creen dos boletas —
+      // la segunda choca acá y toda su transacción se revierte.
+      if (idempotencyKey) {
+        await tx.idempotencyKey.create({
+          data: {
+            key: idempotencyKey,
+            usuarioId: req.user!.id,
+            metodo: "POST",
+            path: "/remitos",
+            statusCode: 201,
+            response: created as unknown as Prisma.InputJsonValue
+          }
+        });
+      }
+      return created;
+    });
+    res.status(201).json(remito);
+  } catch (err) {
+    // Carrera: otra request con la misma clave ganó y ya persistió la boleta.
+    // Devolvemos su respuesta guardada en lugar de propagar el error.
+    if (idempotencyKey && err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+      const existing = await prisma.idempotencyKey.findUnique({ where: { key: idempotencyKey } });
+      if (existing) return res.status(existing.statusCode).json(existing.response);
+    }
+    throw err;
+  }
 });
 
 remittancesRouter.put("/:id", requireRoles(Rol.ADMINISTRADOR, Rol.EMPLEADO), async (req, res) => {

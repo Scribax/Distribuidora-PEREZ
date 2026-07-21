@@ -79,6 +79,7 @@ export interface OfflineOperationRecord {
   status: string;
   attempts: number;
   error?: string;
+  idempotencyKey?: string;
   createdAt: number;
   updatedAt: number;
   syncedAt?: number;

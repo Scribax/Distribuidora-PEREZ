@@ -389,6 +389,19 @@ model CuentaComercialMovimiento {
   @@map("cuentas_comerciales_movimientos")
 }
 
+model IdempotencyKey {
+  key        String   @id @db.VarChar(200)
+  usuarioId  String   @map("usuario_id") @db.Uuid
+  metodo     String   @db.VarChar(10)
+  path       String   @db.VarChar(200)
+  statusCode Int      @map("status_code")
+  response   Json
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([createdAt])
+  @@map("idempotency_keys")
+}
+
 model AuditLog {
   id          String   @id @default(uuid()) @db.Uuid
   usuarioId   String   @map("usuario_id") @db.Uuid

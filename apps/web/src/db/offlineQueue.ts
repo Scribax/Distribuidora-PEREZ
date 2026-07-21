@@ -16,6 +16,7 @@ export interface OfflineOperation {
   status: OfflineOperationStatus;
   attempts: number;
   error?: string;
+  idempotencyKey: string;
   createdAt: number;
   updatedAt: number;
   syncedAt?: number;
@@ -29,7 +30,7 @@ function queueChanged() {
   window.dispatchEvent(new CustomEvent("perez-offline-queue-changed"));
 }
 
-export async function enqueuePendingRemito(body: any, preview: any, scope: string) {
+export async function enqueuePendingRemito(body: any, preview: any, scope: string, idempotencyKey: string) {
   const now = Date.now();
   const operation: OfflineOperation = {
     id: crypto.randomUUID(),
@@ -41,6 +42,7 @@ export async function enqueuePendingRemito(body: any, preview: any, scope: strin
     scope,
     status: "pending",
     attempts: 0,
+    idempotencyKey,
     createdAt: now,
     updatedAt: now,
   };
@@ -97,6 +99,9 @@ export async function syncPendingOperations(session: Session | null) {
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${session.accessToken}`,
+          // Reusar la clave de la operación evita crear una boleta duplicada si
+          // un intento anterior llegó al servidor pero se cortó antes de la respuesta.
+          ...(row.idempotencyKey ? { "Idempotency-Key": row.idempotencyKey } : {}),
         },
         body: JSON.stringify(row.body),
       });

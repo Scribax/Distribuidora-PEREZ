@@ -164,37 +164,52 @@ export function RemittancesView({ api, canWrite, isAdmin, offlineScope }: { api:
       fecha: form.fecha,
       items: remitoItems.map((item) => ({ productoId: item.product.id, cantidad: item.cantidad }))
     };
-    try {
-      await api("/remitos", {
-        method: "POST",
-        body: JSON.stringify(body)
-      });
+    // Generamos la clave de idempotencia antes del intento y la reusamos si la
+    // operación cae a la cola offline: así el reintento (online o desde la cola)
+    // no crea una boleta duplicada cuando la respuesta original se perdió.
+    const idempotencyKey = crypto.randomUUID();
+    const resetForm = () => {
       formEl.reset();
       setRemitoItems([]);
       setDescuentoPorcentaje(0);
       setSelectedClientId("");
       setSelectedVendorId("");
-      await load(filters, 1);
+    };
+    const enqueueOffline = async () => {
+      const client = clients.find((c) => c.id === body.clienteId);
+      const vendor = vendors.find((v) => v.id === body.vendedorId);
+      await enqueuePendingRemito(body, {
+        cliente: client?.nombre ?? "Cliente",
+        vendedor: vendor?.nombre ?? "Sin vendedor",
+        fecha: String(body.fecha),
+        total,
+        items: remitoItems.map((item) => ({ nombre: item.product.nombre, cantidad: item.cantidad }))
+      }, offlineScope, idempotencyKey);
+      resetForm();
+      setError("Boleta guardada en este equipo. Se enviará automáticamente cuando vuelva internet.");
+    };
+    try {
+      await api("/remitos", {
+        method: "POST",
+        headers: { "Idempotency-Key": idempotencyKey },
+        body: JSON.stringify(body)
+      });
     } catch (err: any) {
       if (!navigator.onLine || String(err?.message ?? "").includes("Sin conexión")) {
-        const client = clients.find((c) => c.id === body.clienteId);
-        const vendor = vendors.find((v) => v.id === body.vendedorId);
-        await enqueuePendingRemito(body, {
-          cliente: client?.nombre ?? "Cliente",
-          vendedor: vendor?.nombre ?? "Sin vendedor",
-          fecha: String(body.fecha),
-          total,
-          items: remitoItems.map((item) => ({ nombre: item.product.nombre, cantidad: item.cantidad }))
-        }, offlineScope);
-        formEl.reset();
-        setRemitoItems([]);
-        setDescuentoPorcentaje(0);
-        setSelectedClientId("");
-        setSelectedVendorId("");
-        setError("Boleta guardada en este equipo. Se enviará automáticamente cuando vuelva internet.");
+        await enqueueOffline();
         return;
       }
       setError(err.message ?? "No se pudo crear la boleta");
+      return;
+    }
+    // La boleta se creó en el servidor. Refrescamos la lista en un try aparte:
+    // si el refresco falla (p. ej. se corta internet justo acá) NO debemos
+    // encolar la operación de nuevo — ya está creada.
+    resetForm();
+    try {
+      await load(filters, 1);
+    } catch {
+      /* el listado se actualizará en la próxima recarga */
     }
   }
   const activeClients = clients.filter((x) => x.activo);
