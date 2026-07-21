@@ -4,6 +4,7 @@ import helmet from "helmet";
 import morgan from "morgan";
 import { config } from "./lib/config.js";
 import { errorHandler } from "./lib/errors.js";
+import { startIdempotencyCleanup } from "./lib/idempotency.js";
 import { authRouter } from "./routes/auth.js";
 import { usersRouter } from "./routes/users.js";
 import { catalogRouter } from "./routes/catalog.js";
@@ -40,4 +41,5 @@ app.use(errorHandler);
 
 app.listen(config.port, () => {
   console.log(`API listening on http://localhost:${config.port}`);
+  startIdempotencyCleanup();
 });

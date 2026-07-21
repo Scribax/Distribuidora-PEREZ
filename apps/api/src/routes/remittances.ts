@@ -11,6 +11,7 @@ import { pageArgs } from "../lib/validation.js";
 import { requireAuth, requireRoles } from "../middleware/auth.js";
 import { adjustProductStock, aggregateItems, ensureActiveProducts } from "../lib/stock.js";
 import { audit, diffFields } from "../lib/audit.js";
+import { idempotencyKeyFrom } from "../lib/idempotency.js";
 
 export const remittancesRouter = Router();
 remittancesRouter.use(requireAuth);
@@ -79,17 +80,6 @@ remittancesRouter.get("/:id", async (req, res) => {
   if (!remito) fail(404, "REMITO_NO_ENCONTRADO", "Remito no encontrado");
   res.json(remito);
 });
-
-// Lee y valida el header de idempotencia. La clave (el id de la operación
-// offline local) permite que un reintento del mismo POST no cree una boleta
-// duplicada cuando la respuesta original se perdió en la red.
-function idempotencyKeyFrom(req: { header(name: string): string | undefined }) {
-  const raw = req.header("Idempotency-Key");
-  if (!raw) return null;
-  const key = raw.trim();
-  if (!key || key.length > 200) return null;
-  return key;
-}
 
 remittancesRouter.post("/", requireRoles(Rol.ADMINISTRADOR, Rol.EMPLEADO), async (req, res) => {
   const idempotencyKey = idempotencyKeyFrom(req);
