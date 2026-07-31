@@ -106,6 +106,10 @@ export const remitoUpdateSchema = z.object({
   montoPagado: moneySchema.optional(),
   descuentoPorcentaje: z.coerce.number().min(0).max(100).optional(),
   vendedorId: z.string().uuid().optional().nullable(),
+  // Editable porque la boleta se carga días después de emitirse (fotos de facturas
+  // que llegan tarde). Mover la fecha mueve la boleta en balance y reportes, que
+  // filtran por este campo — es justamente el objetivo.
+  fecha: z.coerce.date().optional(),
   items: z.array(z.object({
     productoId: z.string().uuid(),
     cantidad: positiveIntSchema

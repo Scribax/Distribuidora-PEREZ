@@ -289,7 +289,8 @@ remittancesRouter.put("/:id", requireRoles(Rol.ADMINISTRADOR, Rol.EMPLEADO), asy
         montoPagado: payment.montoPagado,
         pagoEstado: payment.pagoEstado,
         metodoPago: input.metodoPago === undefined ? undefined : input.metodoPago as MetodoPago | null,
-        vendedorId: input.vendedorId === undefined ? undefined : input.vendedorId || null
+        vendedorId: input.vendedorId === undefined ? undefined : input.vendedorId || null,
+        fecha: input.fecha ?? undefined
       },
       include: { items: true, cliente: true, vendedor: true }
     });
