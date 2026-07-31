@@ -5,8 +5,21 @@ export function money(value: number | string) {
   return new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS" }).format(Number.isFinite(n) ? n : 0);
 }
 
-export function dateInput(value?: string) {
-  return value ? new Date(value).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10);
+// Las columnas @db.Date (remito.fecha, compra.fecha, gasto.fecha...) son días de
+// calendario, no instantes: Prisma las serializa como medianoche UTC
+// ("2026-07-17T00:00:00.000Z"). Hay que leerlas en UTC, porque pasarlas a UTC-3
+// las retrocede un día. Para timestamps reales (createdAt) usar formatDateTime.
+const CALENDAR_DAY_FORMAT = new Intl.DateTimeFormat("es-AR", { timeZone: "UTC", day: "numeric", month: "numeric", year: "numeric" });
+
+// Sin valor devuelve el día de hoy según el reloj local. No se puede usar
+// toISOString() acá: es UTC, y después de las 21:00 en Argentina ya devuelve el
+// día siguiente.
+export function dateInput(value?: string | Date) {
+  if (value === undefined) {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  }
+  return new Date(value).toISOString().slice(0, 10);
 }
 
 export function qs(params: Record<string, string | number | undefined>) {
@@ -92,8 +105,20 @@ export function referenceLabel(reference?: string) {
   return "Movimiento de stock";
 }
 
-export function formatDate(value: string) {
-  return new Date(value).toLocaleDateString("es-AR");
+// Para columnas @db.Date: fecha de boleta, compra, gasto, pago. Ver el comentario
+// de CALENDAR_DAY_FORMAT arriba.
+export function formatDate(value?: string | Date | null) {
+  if (value === null || value === undefined || value === "") return "-";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "-" : CALENDAR_DAY_FORMAT.format(date);
+}
+
+// Para columnas DateTime que sí son un instante (createdAt, updatedAt): estas van
+// en hora local, que es lo que el usuario espera ver.
+export function formatDateTime(value?: string | Date | null) {
+  if (value === null || value === undefined || value === "") return "-";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "-" : date.toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" });
 }
 
 export function formatRemitoRow(r: any) {
@@ -114,5 +139,5 @@ export function formatPurchaseRow(row: any) {
 }
 
 export function formatMovementRow(row: any) {
-  return { ...row, createdFmt: new Date(row.createdAt).toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" }), tipoFmt: movementLabel(row.tipo) };
+  return { ...row, createdFmt: formatDateTime(row.createdAt), tipoFmt: movementLabel(row.tipo) };
 }

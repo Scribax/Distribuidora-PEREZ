@@ -2,7 +2,7 @@
 import { Copy, MessageCircle, Phone, Search, Send, Trash2, X } from "lucide-react";
 import type { useApi } from "../api";
 import type { Client, LineItem, Product, Supplier, User, Vendor, Dashboard } from "../types";
-import { confirmAction, dateInput, expenseLabel, formatDate, formatMovementRow, formatPurchaseRow, formatRemitoItemRow, formatRemitoRow, itemPrice, money, movementLabel, openPdfViewer, payload, qs, referenceLabel, remitoPending } from "../utils";
+import { confirmAction, dateInput, expenseLabel, formatDate, formatDateTime, formatMovementRow, formatPurchaseRow, formatRemitoItemRow, formatRemitoRow, itemPrice, money, movementLabel, openPdfViewer, payload, qs, referenceLabel, remitoPending } from "../utils";
 import { Metric, Row, Table, SearchBox } from "../components/ui";
 import { EntityPicker, ItemList, ProductPicker } from "../components/pickers";
 
@@ -312,7 +312,7 @@ export function ClientsView({ api, canWrite, canEditBalance }: { api: ReturnType
                       Boleta #{cobro.numero}
                     </span>
                     <span>
-                      Fecha: {new Date(cobro.fecha).toLocaleDateString("es-AR")}
+                      Fecha: {formatDate(cobro.fecha)}
                     </span>
                   </div>
                   <div className="cobro-mensaje-preview">
@@ -320,7 +320,7 @@ export function ClientsView({ api, canWrite, canEditBalance }: { api: ReturnType
                   </div>
                   {cobro.ultima_notificacion_at && (
                     <span className="cobro-notif-time">
-                      Último recordatorio registrado: {new Date(cobro.ultima_notificacion_at).toLocaleString("es-AR")}
+                      Último recordatorio registrado: {formatDateTime(cobro.ultima_notificacion_at)}
                     </span>
                   )}
                 </div>

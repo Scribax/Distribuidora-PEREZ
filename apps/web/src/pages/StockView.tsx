@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Search, Trash2, X } from "lucide-react";
 import type { useApi } from "../api";
 import type { Client, LineItem, Product, Supplier, User, Vendor, Dashboard } from "../types";
-import { confirmAction, dateInput, expenseLabel, formatDate, formatMovementRow, formatPurchaseRow, formatRemitoItemRow, formatRemitoRow, itemPrice, money, movementLabel, payload, qs, referenceLabel, remitoPending } from "../utils";
+import { confirmAction, dateInput, expenseLabel, formatDate, formatDateTime, formatMovementRow, formatPurchaseRow, formatRemitoItemRow, formatRemitoRow, itemPrice, money, movementLabel, payload, qs, referenceLabel, remitoPending } from "../utils";
 import { Metric, Row, Table, SearchBox } from "../components/ui";
 import { EntityPicker, ItemList, ProductPicker } from "../components/pickers";
 
@@ -147,7 +147,7 @@ function StockProductCard({ product, movements, defaultOpen }: { product: Produc
     </summary>
     <div className="stock-product-body">
       <div className="stock-movement-head">
-        {latest && <p className="muted">Último movimiento: {formatDate(latest.createdAt)} · {movementLabel(latest.tipo)}</p>}
+        {latest && <p className="muted">Último movimiento: {formatDateTime(latest.createdAt)} · {movementLabel(latest.tipo)}</p>}
         {!!movements.length && <span>{movementStart}-{movementEnd} de {movements.length}</span>}
       </div>
       {movementRows.length ? <div className="stock-movement-table"><Table rows={movementRows} cols={[["createdFmt", "Fecha"], ["tipoFmt", "Tipo"], ["cantidad", "Cantidad"], ["stockResultante", "Stock"], ["motivo", "Motivo"]]} /></div> : <p className="muted">Sin movimientos para los filtros elegidos.</p>}
