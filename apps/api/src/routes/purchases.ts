@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { Prisma, Rol } from "@prisma/client";
+import { CompraEstado, Prisma, Rol } from "@prisma/client";
 import { endOfDay } from "date-fns";
 import { prisma } from "../lib/prisma.js";
 import { fail } from "../lib/errors.js";
@@ -18,11 +18,20 @@ purchasesRouter.get("/", async (req, res) => {
   const productoId = String(req.query.productoId ?? "");
   const fechaDesde = req.query.fechaDesde ? new Date(String(req.query.fechaDesde)) : undefined;
   const fechaHasta = req.query.fechaHasta ? endOfDay(new Date(String(req.query.fechaHasta))) : undefined;
+  // Las anuladas se ocultan por defecto: quedan en la base para auditoría y para
+  // explicar el movimiento de stock, pero no ensucian el listado. "TODAS" las
+  // trae de vuelta. Cualquier valor no reconocido cae en ACTIVA, así un query
+  // mal escrito nunca muestra de más.
+  const estadoParam = String(req.query.estado ?? "").toUpperCase();
+  const estado = estadoParam === "TODAS" ? undefined
+    : estadoParam === CompraEstado.ANULADA ? CompraEstado.ANULADA
+    : CompraEstado.ACTIVA;
   const where: Prisma.CompraWhereInput = {
     OR: proveedor ? [
       { proveedorNombre: { contains: proveedor, mode: "insensitive" } },
       { proveedor: { nombre: { contains: proveedor, mode: "insensitive" } } }
     ] : undefined,
+    estado,
     fecha: fechaDesde || fechaHasta ? { gte: fechaDesde, lte: fechaHasta } : undefined,
     items: productoId ? { some: { productoId } } : undefined
   };

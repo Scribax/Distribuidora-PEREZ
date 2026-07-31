@@ -16,7 +16,7 @@ export function PurchasesView({ api, canWrite, isAdmin }: { api: ReturnType<type
   const [supplierId, setSupplierId] = useState("");
   const [builderProductId, setBuilderProductId] = useState("");
   const [costoUnitario, setCostoUnitario] = useState("");
-  const [filters, setFilters] = useState({ proveedor: "", productoId: "", fechaDesde: "", fechaHasta: "" });
+  const [filters, setFilters] = useState({ proveedor: "", productoId: "", fechaDesde: "", fechaHasta: "", estado: "" });
   const [error, setError] = useState("");
   const load = (next = filters) => Promise.all([
     api(`/compras?${qs({ ...next, pageSize: 100 })}`),
@@ -71,7 +71,7 @@ export function PurchasesView({ api, canWrite, isAdmin }: { api: ReturnType<type
   return <div className="purchase-page">
     <section className="panel wide">
       <h2>Compras registradas</h2>
-      <FilterPanel filters={filters} setFilters={setFilters} products={products} onSubmit={(e) => { e.preventDefault(); load(filters); }} onClear={() => { const clean = { proveedor: "", productoId: "", fechaDesde: "", fechaHasta: "" }; setFilters(clean); load(clean); }} />
+      <FilterPanel filters={filters} setFilters={setFilters} products={products} onSubmit={(e) => { e.preventDefault(); load(filters); }} onClear={() => { const clean = { proveedor: "", productoId: "", fechaDesde: "", fechaHasta: "", estado: "" }; setFilters(clean); load(clean); }} onEstadoChange={(estado) => { const next = { ...filters, estado }; setFilters(next); load(next); }} />
       <Table rows={rows} cols={[["proveedorNombre", "Proveedor"], ["fechaCorta", "Fecha"], ["totalFmt", "Total"], ["itemsCount", "Ítems"], ["estado", "Estado"]]} onRowClick={openPurchase} actions={(row) => isAdmin && row.estado === "ACTIVA" ? <button type="button" className="secondary" onClick={() => annul(row)}>Anular</button> : null} />
     </section>
     <div className="purchase-workspace">

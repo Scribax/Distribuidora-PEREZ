@@ -24,6 +24,9 @@ const STATIC_PRELOAD_PATHS = [
   "/vendedores?pageSize=1000",
   "/proveedores?pageSize=1000",
   "/compras?pageSize=100",
+  // Con estado=TODAS: es la URL que pide el check "Ver anuladas". Sin esto, tildarlo
+  // sin internet corta con "Sin conexión" en vez de mostrar lo último conocido.
+  "/compras?estado=TODAS&pageSize=100",
   "/remitos?pageSize=100",
   "/gastos?pageSize=100",
   "/stock/stats",

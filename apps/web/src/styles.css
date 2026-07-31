@@ -1504,7 +1504,7 @@ header span { color: var(--muted); }
   margin-bottom: 14px;
 }
 .filters-wide {
-  grid-template-columns: repeat(4, minmax(120px, 1fr)) auto auto;
+  grid-template-columns: repeat(4, minmax(120px, 1fr)) auto auto auto;
 }
 .picker {
   display: grid;
@@ -5350,10 +5350,15 @@ tr:hover td {
 }
 .filters-wide {
   display: grid;
-  grid-template-columns: minmax(200px, 1fr) minmax(160px, 0.75fr) 140px 140px auto auto;
+  grid-template-columns: minmax(200px, 1fr) minmax(160px, 0.75fr) 140px 140px auto auto auto;
   gap: 10px;
   align-items: stretch;
   padding: 12px;
+}
+/* El check "Ver anuladas" no debe estirarse como los inputs de al lado. */
+.filters-wide .checkbox-line {
+  align-self: center;
+  white-space: nowrap;
 }
 .expense-list {
   display: grid;

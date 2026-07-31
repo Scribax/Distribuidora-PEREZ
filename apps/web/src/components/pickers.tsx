@@ -60,12 +60,15 @@ export function ItemList({ items, mode, onRemove, priceList }: { items: LineItem
   return <div className="line-items">{items.map((item) => { const unit = mode === "compra" ? item.costoUnitario ?? 0 : itemPrice(item.product, priceList ?? "MAYORISTA"); return <div className="line-item" key={item.product.id}><div><strong>{item.product.nombre}</strong><span>{item.product.codigoInterno} · cant. {item.cantidad} · unit. {money(unit)}{mode === "compra" ? ` · actualiza costo ${item.actualizarCosto === false ? "no" : "sí"}` : ""}</span></div><strong>{money(item.cantidad * unit)}</strong><button type="button" className="icon-button" onClick={() => onRemove(item.product.id)} title="Quitar producto"><Trash2 size={17} /></button></div>; })}</div>;
 }
 
-export function FilterPanel({ filters, setFilters, products, onSubmit, onClear }: { filters: { proveedor: string; productoId: string; fechaDesde: string; fechaHasta: string }; setFilters: (v: any) => void; products: Product[]; onSubmit: (e: React.FormEvent) => void; onClear: () => void }) {
+export function FilterPanel({ filters, setFilters, products, onSubmit, onClear, onEstadoChange }: { filters: { proveedor: string; productoId: string; fechaDesde: string; fechaHasta: string; estado: string }; setFilters: (v: any) => void; products: Product[]; onSubmit: (e: React.FormEvent) => void; onClear: () => void; onEstadoChange: (v: string) => void }) {
   return <form className="filters filters-wide" onSubmit={onSubmit}>
     <input value={filters.proveedor} onChange={(e) => setFilters({ ...filters, proveedor: e.target.value })} placeholder="Proveedor" />
     <EntityPicker items={products} value={filters.productoId} onChange={(value) => setFilters({ ...filters, productoId: value })} title="Filtrar producto" placeholder="Todos los productos" searchPlaceholder="Buscar por código, nombre o rubro" getLabel={(product) => product.nombre} getMeta={(product) => `${product.codigoInterno} · stock ${product.stockActual} · ${product.categoria?.nombre ?? "Sin rubro"}`} />
     <input type="date" value={filters.fechaDesde} onChange={(e) => setFilters({ ...filters, fechaDesde: e.target.value })} />
     <input type="date" value={filters.fechaHasta} onChange={(e) => setFilters({ ...filters, fechaHasta: e.target.value })} />
+    {/* Se aplica solo, sin pasar por "Filtrar": un check que no hace nada hasta
+        apretar otro botón se lee como que está roto. */}
+    <label className="checkbox-line"><input type="checkbox" checked={filters.estado === "TODAS"} onChange={(e) => onEstadoChange(e.target.checked ? "TODAS" : "")} /><span>Ver anuladas</span></label>
     <button>Filtrar</button>
     <button type="button" className="secondary" onClick={onClear}>Limpiar</button>
   </form>;
