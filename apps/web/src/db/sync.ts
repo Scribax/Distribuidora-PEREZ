@@ -28,6 +28,10 @@ const STATIC_PRELOAD_PATHS = [
   // sin internet corta con "Sin conexión" en vez de mostrar lo último conocido.
   "/compras?estado=TODAS&pageSize=100",
   "/remitos?pageSize=100",
+  // Es la URL exacta que pide la lista de boletas al entrar (estado=ACTIVO por
+  // defecto, pageSize=10). Sin esto, la primera visita sin internet después del
+  // deploy no tiene nada en caché para esa combinación.
+  "/remitos?estado=ACTIVO&page=1&pageSize=10",
   "/gastos?pageSize=100",
   "/stock/stats",
   "/stock/movimientos?pageSize=100",

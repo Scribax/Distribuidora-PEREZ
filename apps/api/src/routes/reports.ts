@@ -152,8 +152,9 @@ reportsRouter.get("/ventas", async (req, res) => {
     orderBy: { fecha: "desc" }
   });
   const rows = sales.map((sale) => {
-    // Los remitos cancelados se muestran (con su estado) pero no aportan a las
-    // métricas de rentabilidad: ganancia y comisión van en cero para no inflar totales.
+    // Los remitos cancelados se muestran (con su estado y su monto original) pero
+    // van en cero en todas las columnas de dinero, para que sumar cualquiera de
+    // ellas en el Excel dé el número real del mes.
     const anulado = sale.estado !== "ACTIVO";
     const comision = !anulado && sale.vendedor ? money(sale.total) * Number(sale.vendedor.porcentajeComision) / 100 : 0;
     const costoVendido = sale.items.reduce((sum, item) => sum + money(item.costoTotal), 0);
@@ -163,14 +164,16 @@ reportsRouter.get("/ventas", async (req, res) => {
       fecha: sale.fecha.toISOString().slice(0, 10),
       cliente: sale.cliente.nombre,
       vendedor: sale.vendedor?.nombre ?? "",
-      total: money(sale.total),
-      pagado: money(sale.montoPagado),
+      // Total y pagado también van en cero: si no, sumar esas columnas en el Excel
+      // da una facturación más alta que la real. El monto original queda en Estado.
+      total: anulado ? 0 : money(sale.total),
+      pagado: anulado ? 0 : money(sale.montoPagado),
       pago: sale.pagoEstado,
       metodo: sale.metodoPago ?? "",
       costoVendido: Number((anulado ? 0 : costoVendido).toFixed(2)),
       ganancia: Number(ganancia.toFixed(2)),
       comision: Number(comision.toFixed(2)),
-      estado: sale.estado
+      estado: anulado ? `${sale.estado} (era ${money(sale.total).toLocaleString("es-AR", { style: "currency", currency: "ARS" })})` : sale.estado
     };
   });
   await sendReport(res, "ventas", "Ventas", [
@@ -185,7 +188,7 @@ reportsRouter.get("/ventas", async (req, res) => {
     { header: "Costo vendido", key: "costoVendido", width: 16, align: "right", kind: "currency" },
     { header: "Ganancia", key: "ganancia", width: 16, align: "right", kind: "currency" },
     { header: "Comisión", key: "comision", width: 14, align: "right", kind: "currency" },
-    { header: "Estado", key: "estado", width: 14 }
+    { header: "Estado", key: "estado", width: 26 }
   ], rows, format);
 });
 

@@ -25,7 +25,10 @@ export function RemittancesView({ api, canWrite, isAdmin, offlineScope }: { api:
   const [selectedVendorId, setSelectedVendorId] = useState("");
   const [builderProductId, setBuilderProductId] = useState("");
   const [editProductId, setEditProductId] = useState("");
-  const [filters, setFilters] = useState({ numero: "", clienteId: "", vendedorId: "", estado: "", pagoEstado: "", fechaDesde: "", fechaHasta: "" });
+  // estado arranca en ACTIVO: las canceladas quedan en la base y se ven eligiendo
+  // "Cancelados" o "Todos los estados" en el filtro, pero no ensucian la lista al
+  // entrar. Antes arrancaba en "" (todos) y aparecían mezcladas siempre.
+  const [filters, setFilters] = useState({ numero: "", clienteId: "", vendedorId: "", estado: "ACTIVO", pagoEstado: "", fechaDesde: "", fechaHasta: "" });
   const [error, setError] = useState("");
   const [savingEdit, setSavingEdit] = useState(false);
   const [editSaved, setEditSaved] = useState(false);
