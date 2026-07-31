@@ -217,19 +217,25 @@ reportsRouter.get("/compras", async (req, res) => {
   const format = String(req.query.format ?? "pdf");
   const { start, end } = period(req);
   const purchases = await prisma.compra.findMany({ where: { fecha: { gte: start, lte: end } }, include: { items: true }, orderBy: { fecha: "desc" } });
-  const rows = purchases.map((purchase) => ({
-    proveedor: purchase.proveedorNombre,
-    fecha: purchase.fecha.toISOString().slice(0, 10),
-    total: money(purchase.total),
-    items: purchase.items.length,
-    estado: purchase.estado
-  }));
+  const rows = purchases.map((purchase) => {
+    // Mismo criterio que el reporte de ventas: la compra anulada se muestra (con su
+    // estado) pero va en cero, así sumar la columna Total da el gasto real del mes.
+    // El monto original queda en Estado para no perder el dato.
+    const anulada = purchase.estado !== "ACTIVA";
+    return {
+      proveedor: purchase.proveedorNombre,
+      fecha: purchase.fecha.toISOString().slice(0, 10),
+      total: anulada ? 0 : money(purchase.total),
+      items: purchase.items.length,
+      estado: anulada ? `ANULADA (era ${money(purchase.total).toLocaleString("es-AR", { style: "currency", currency: "ARS" })})` : purchase.estado
+    };
+  });
   await sendReport(res, "compras", "Compras", [
     { header: "Proveedor", key: "proveedor", width: 30 },
     { header: "Fecha", key: "fecha", width: 16 },
     { header: "Total", key: "total", width: 16, align: "right", kind: "currency" },
     { header: "Ítems", key: "items", width: 12, align: "right", kind: "number" },
-    { header: "Estado", key: "estado", width: 16 }
+    { header: "Estado", key: "estado", width: 28 }
   ], rows, format);
 });
 
