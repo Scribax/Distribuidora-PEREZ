@@ -272,8 +272,12 @@ reportsRouter.get("/productos", async (req, res) => {
 reportsRouter.get("/comerciales", async (req, res) => {
   const format = String(req.query.format ?? "pdf");
   const vendedorId = String(req.query.vendedorId ?? "");
-  const { start, end } = period(req);
-  const where: any = { fecha: { gte: start, lte: end } };
+  const tienePeriodo = req.query.year !== undefined || req.query.month !== undefined;
+  const where: any = {};
+  if (tienePeriodo) {
+    const { start, end } = period(req);
+    where.fecha = { gte: start, lte: end };
+  }
   if (vendedorId) where.vendedorId = vendedorId;
   const movimientos = await prisma.cuentaComercialMovimiento.findMany({
     where,

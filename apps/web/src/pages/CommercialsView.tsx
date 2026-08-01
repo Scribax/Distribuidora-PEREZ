@@ -134,13 +134,13 @@ export function CommercialsView({ api, isAdmin, canWrite }: { api: ReturnType<ty
     const accept = format === "xlsx"
       ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
       : "application/pdf";
-    const params = qs({ year: commissionPeriod.year, month: commissionPeriod.month, vendedorId: accountMovementFilterVendor || undefined, format });
+    const params = qs({ vendedorId: accountMovementFilterVendor || undefined, format });
     try {
       const blob = await api(`/informes/comerciales?${params}`, { headers: { Accept: accept } });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `cuenta-comercial-${commissionPeriod.year}-${String(commissionPeriod.month).padStart(2, "0")}.${ext}`;
+      a.download = `cuenta-comercial${accountMovementFilterVendor ? "-" + (vendors.find(v => v.id === accountMovementFilterVendor)?.nombre ?? "vendedor") : ""}.${ext}`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
