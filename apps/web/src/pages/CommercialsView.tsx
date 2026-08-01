@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Search, Trash2, X } from "lucide-react";
 import type { useApi } from "../api";
-import { API } from "../api";
 import type { Client, LineItem, Product, Supplier, User, Vendor, Dashboard } from "../types";
 import { confirmAction, dateInput, expenseLabel, formatDate, formatMovementRow, formatPurchaseRow, formatRemitoItemRow, formatRemitoRow, itemPrice, money, movementLabel, openPdfViewer, payload, qs, referenceLabel, remitoPending } from "../utils";
 import { Metric, Row, Table, SearchBox } from "../components/ui";
@@ -129,6 +128,27 @@ export function CommercialsView({ api, isAdmin, canWrite }: { api: ReturnType<ty
       setError(err.message ?? "No se pudo registrar el movimiento");
     }
   }
+  async function exportAccountReport(format: "xlsx" | "pdf") {
+    setError("");
+    const ext = format === "xlsx" ? "xlsx" : "pdf";
+    const accept = format === "xlsx"
+      ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      : "application/pdf";
+    const params = qs({ year: commissionPeriod.year, month: commissionPeriod.month, vendedorId: accountMovementFilterVendor || undefined, format });
+    try {
+      const blob = await api(`/informes/comerciales?${params}`, { headers: { Accept: accept } });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `cuenta-comercial-${commissionPeriod.year}-${String(commissionPeriod.month).padStart(2, "0")}.${ext}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      setError(err.message ?? "No se pudo exportar el informe");
+    }
+  }
   async function removeAccountMovement(row: any) {
     if (!confirmAction(`¿Eliminar este movimiento de ${row.vendedor?.nombre ?? "cuenta"}?`)) return;
     setError("");
@@ -225,8 +245,8 @@ export function CommercialsView({ api, isAdmin, canWrite }: { api: ReturnType<ty
                   <option value="">Todos los vendedores</option>
                   {vendors.map((vendor) => <option key={vendor.id} value={vendor.id}>{vendor.nombre}</option>)}
                 </select>
-                <button type="button" className="secondary tiny-action" onClick={() => window.open(`${API}/informes/comerciales?format=xlsx&${qs(commissionPeriod)}${accountMovementFilterVendor ? `&vendedorId=${accountMovementFilterVendor}` : ""}`, "_blank")}>📥 Excel</button>
-                <button type="button" className="secondary tiny-action" onClick={() => window.open(`${API}/informes/comerciales?format=pdf&${qs(commissionPeriod)}${accountMovementFilterVendor ? `&vendedorId=${accountMovementFilterVendor}` : ""}`, "_blank")}>📄 PDF</button>
+                <button type="button" className="secondary tiny-action" onClick={() => exportAccountReport("xlsx")}>📥 Excel</button>
+                <button type="button" className="secondary tiny-action" onClick={() => exportAccountReport("pdf")}>📄 PDF</button>
               </div>
             </div>
             {accountMovements.map((row) => <div className="account-movement-row" key={row.id}><div><strong>{row.tipo === "APORTE" ? "Aporte" : row.tipo === "RETIRO" ? "Retiro" : "Ajuste"} · {row.vendedor?.nombre}</strong><span>{formatDate(row.fecha)} · {row.metodoPago ?? "Sin método"} · {row.usuario?.nombre ?? "Usuario"}</span><small>{row.descripcion}</small></div><strong className={row.tipo === "RETIRO" ? "negative-money" : "positive-money"}>{money(row.monto)}</strong>{isAdmin && <button type="button" className="icon-button" onClick={() => removeAccountMovement(row)} title="Eliminar movimiento"><Trash2 size={16} /></button>}</div>)}
