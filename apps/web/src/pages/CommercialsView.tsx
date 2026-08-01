@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Search, Trash2, X } from "lucide-react";
 import type { useApi } from "../api";
+import { API } from "../api";
 import type { Client, LineItem, Product, Supplier, User, Vendor, Dashboard } from "../types";
 import { confirmAction, dateInput, expenseLabel, formatDate, formatMovementRow, formatPurchaseRow, formatRemitoItemRow, formatRemitoRow, itemPrice, money, movementLabel, openPdfViewer, payload, qs, referenceLabel, remitoPending } from "../utils";
 import { Metric, Row, Table, SearchBox } from "../components/ui";
@@ -22,11 +23,22 @@ export function CommercialsView({ api, isAdmin, canWrite }: { api: ReturnType<ty
   const [commissionMessage, setCommissionMessage] = useState("");
   const [accountRows, setAccountRows] = useState<any[]>([]);
   const [accountMovements, setAccountMovements] = useState<any[]>([]);
+  const [accountMovementPage, setAccountMovementPage] = useState(1);
+  const [accountMovementTotalPages, setAccountMovementTotalPages] = useState(1);
+  const [accountMovementFilterVendor, setAccountMovementFilterVendor] = useState("");
   const [accountVendorId, setAccountVendorId] = useState("");
   const loadVendors = () => api("/vendedores?pageSize=100").then((d) => setVendors(d.items));
   const loadSuppliers = () => api("/proveedores?pageSize=100").then((d) => setSuppliers(d.items));
   const loadCommissionRows = (period = commissionPeriod) => api(`/vendedores/comisiones/gastos?${qs(period)}`).then((data) => setCommissionRows(data.items ?? [])).catch(() => setCommissionRows([]));
-  const loadAccountRows = (period = commissionPeriod) => api(`/vendedores/cuenta/resumen?${qs(period)}`).then((data) => { setAccountRows(data.items ?? []); setAccountMovements(data.movimientos ?? []); }).catch(() => { setAccountRows([]); setAccountMovements([]); });
+  const loadAccountRows = (period = commissionPeriod, page = 1, vendorFilter = accountMovementFilterVendor) => {
+    const query = qs({ year: period.year, month: period.month, page, pageSize: 20, vendedorId: vendorFilter || undefined });
+    api(`/vendedores/cuenta/resumen?${query}`).then((data) => {
+      setAccountRows(data.items ?? []);
+      setAccountMovements(data.movimientos ?? []);
+      setAccountMovementPage(data.page ?? 1);
+      setAccountMovementTotalPages(data.totalPages ?? 1);
+    }).catch(() => { setAccountRows([]); setAccountMovements([]); });
+  };
   useEffect(() => { loadVendors(); loadSuppliers(); loadCommissionRows(); loadAccountRows(); }, []);
   async function openVendor(vendor: Vendor) {
     setError("");
@@ -110,7 +122,8 @@ export function CommercialsView({ api, isAdmin, canWrite }: { api: ReturnType<ty
       await api("/vendedores/cuenta/movimientos", { method: "POST", body: JSON.stringify({ vendedorId: form.vendedorId, tipo: form.tipo, fecha: form.fecha, monto: Number(form.monto), metodoPago: form.metodoPago || null, descripcion: form.descripcion, comprobante: form.comprobante || null, observaciones: form.observaciones || null }) });
       formEl.reset();
       setAccountVendorId("");
-      await loadAccountRows(commissionPeriod);
+      setAccountMovementPage(1);
+      await loadAccountRows(commissionPeriod, 1);
       await loadCommissionRows(commissionPeriod);
     } catch (err: any) {
       setError(err.message ?? "No se pudo registrar el movimiento");
@@ -121,7 +134,7 @@ export function CommercialsView({ api, isAdmin, canWrite }: { api: ReturnType<ty
     setError("");
     try {
       await api(`/vendedores/cuenta/movimientos/${row.id}`, { method: "DELETE" });
-      await loadAccountRows(commissionPeriod);
+      await loadAccountRows(commissionPeriod, accountMovementPage);
       await loadCommissionRows(commissionPeriod);
     } catch (err: any) {
       setError(err.message ?? "No se pudo eliminar el movimiento");
@@ -205,8 +218,24 @@ export function CommercialsView({ api, isAdmin, canWrite }: { api: ReturnType<ty
             <button disabled={!canWrite}>Registrar movimiento</button>
           </form>
           <div className="account-movement-list">
-            {accountMovements.slice(0, 8).map((row) => <div className="account-movement-row" key={row.id}><div><strong>{row.tipo === "APORTE" ? "Aporte" : row.tipo === "RETIRO" ? "Retiro" : "Ajuste"} · {row.vendedor?.nombre}</strong><span>{formatDate(row.fecha)} · {row.metodoPago ?? "Sin método"} · {row.usuario?.nombre ?? "Usuario"}</span><small>{row.descripcion}</small></div><strong className={row.tipo === "RETIRO" ? "negative-money" : "positive-money"}>{money(row.monto)}</strong>{isAdmin && <button type="button" className="icon-button" onClick={() => removeAccountMovement(row)} title="Eliminar movimiento"><Trash2 size={16} /></button>}</div>)}
-            {!accountMovements.length && <p className="muted">Todavía no hay aportes ni retiros registrados.</p>}
+            <div className="account-movement-head">
+              <div className="section-title"><h3>Movimientos</h3><span>Página {accountMovementPage} de {accountMovementTotalPages || 1} · {accountMovements.length} movimientos visibles.</span></div>
+              <div className="account-movement-controls">
+                <select value={accountMovementFilterVendor} onChange={(event) => { setAccountMovementFilterVendor(event.target.value); loadAccountRows(commissionPeriod, 1, event.target.value); }} className="compact-select">
+                  <option value="">Todos los vendedores</option>
+                  {vendors.map((vendor) => <option key={vendor.id} value={vendor.id}>{vendor.nombre}</option>)}
+                </select>
+                <button type="button" className="secondary tiny-action" onClick={() => window.open(`${API}/informes/comerciales?format=xlsx&${qs(commissionPeriod)}${accountMovementFilterVendor ? `&vendedorId=${accountMovementFilterVendor}` : ""}`, "_blank")}>📥 Excel</button>
+                <button type="button" className="secondary tiny-action" onClick={() => window.open(`${API}/informes/comerciales?format=pdf&${qs(commissionPeriod)}${accountMovementFilterVendor ? `&vendedorId=${accountMovementFilterVendor}` : ""}`, "_blank")}>📄 PDF</button>
+              </div>
+            </div>
+            {accountMovements.map((row) => <div className="account-movement-row" key={row.id}><div><strong>{row.tipo === "APORTE" ? "Aporte" : row.tipo === "RETIRO" ? "Retiro" : "Ajuste"} · {row.vendedor?.nombre}</strong><span>{formatDate(row.fecha)} · {row.metodoPago ?? "Sin método"} · {row.usuario?.nombre ?? "Usuario"}</span><small>{row.descripcion}</small></div><strong className={row.tipo === "RETIRO" ? "negative-money" : "positive-money"}>{money(row.monto)}</strong>{isAdmin && <button type="button" className="icon-button" onClick={() => removeAccountMovement(row)} title="Eliminar movimiento"><Trash2 size={16} /></button>}</div>)}
+            {!accountMovements.length && <p className="muted">Todavía no hay aportes ni retiros registrados{accountMovementFilterVendor ? " para este vendedor" : ""}.</p>}
+            {accountMovementTotalPages > 1 && <div className="pager">
+              <button type="button" className="secondary" onClick={() => loadAccountRows(commissionPeriod, accountMovementPage - 1)} disabled={accountMovementPage <= 1}>Anterior</button>
+              <span>Página {accountMovementPage} de {accountMovementTotalPages}</span>
+              <button type="button" className="secondary" onClick={() => loadAccountRows(commissionPeriod, accountMovementPage + 1)} disabled={accountMovementPage >= accountMovementTotalPages}>Siguiente</button>
+            </div>}
           </div>
         </div>
         <div className="vendor-list vendor-list-grid">{vendors.map((vendor) => <button type="button" className="vendor-card vendor-stats-card" key={vendor.id} onClick={() => openVendor(vendor)}><div><strong>{vendor.nombre}</strong><span>{vendor.activo ? "Activo" : "Inactivo"} · {Number(vendor.porcentajeComision)}% comisión</span></div><div className="vendor-stats"><span>Histórico activo</span><strong>{money(vendor.ventasTotal ?? 0)}</strong><small>Ventas de {vendor.boletasTotal ?? 0} boleta{(vendor.boletasTotal ?? 0) === 1 ? "" : "s"} activas</small><small>Comisión histórica {money(vendor.comisionTotal ?? 0)}</small></div></button>)}{!vendors.length && <p className="muted">No hay vendedores cargados.</p>}</div>

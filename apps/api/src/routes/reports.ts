@@ -269,6 +269,42 @@ reportsRouter.get("/productos", async (req, res) => {
   ], rows, format);
 });
 
+reportsRouter.get("/comerciales", async (req, res) => {
+  const format = String(req.query.format ?? "pdf");
+  const vendedorId = String(req.query.vendedorId ?? "");
+  const { start, end } = period(req);
+  const where: any = { fecha: { gte: start, lte: end } };
+  if (vendedorId) where.vendedorId = vendedorId;
+  const movimientos = await prisma.cuentaComercialMovimiento.findMany({
+    where,
+    include: { vendedor: true, usuario: { select: { nombre: true } } },
+    orderBy: { fecha: "desc" }
+  });
+  const rows = movimientos.map((mov) => ({
+    fecha: mov.fecha.toISOString().slice(0, 10),
+    vendedor: mov.vendedor.nombre,
+    tipo: mov.tipo === "APORTE" ? "Aporte" : mov.tipo === "RETIRO" ? "Retiro" : "Ajuste",
+    descripcion: mov.descripcion,
+    monto: money(mov.monto),
+    signo: mov.tipo === "RETIRO" ? -money(mov.monto) : money(mov.monto),
+    metodo: mov.metodoPago ?? "",
+    comprobante: mov.comprobante ?? "",
+    observaciones: mov.observaciones ?? "",
+    usuario: mov.usuario.nombre
+  }));
+  await sendReport(res, "cuenta-comercial", "Cuenta de vendedores", [
+    { header: "Fecha", key: "fecha", width: 14 },
+    { header: "Vendedor", key: "vendedor", width: 22 },
+    { header: "Tipo", key: "tipo", width: 12 },
+    { header: "Descripción", key: "descripcion", width: 28 },
+    { header: "Monto", key: "monto", width: 14, align: "right", kind: "currency" },
+    { header: "Método", key: "metodo", width: 16 },
+    { header: "Comprobante", key: "comprobante", width: 18 },
+    { header: "Observaciones", key: "observaciones", width: 22 },
+    { header: "Usuario", key: "usuario", width: 18 }
+  ], rows, format);
+});
+
 reportsRouter.get("/auditoria", async (req, res) => {
   const { page, pageSize, skip, take } = await import("../lib/validation.js").then(({ pageArgs }) => pageArgs(req.query));
   const modulo = String(req.query.modulo ?? "");

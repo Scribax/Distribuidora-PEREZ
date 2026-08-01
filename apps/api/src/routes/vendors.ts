@@ -171,15 +171,24 @@ vendorsRouter.post("/comisiones/gastos", requireRoles(Rol.ADMINISTRADOR, Rol.EMP
 
 vendorsRouter.get("/cuenta/resumen", requireRoles(Rol.ADMINISTRADOR, Rol.EMPLEADO), async (req, res) => {
   const { year, month } = periodFromQuery(req.query);
-  const [items, movimientos] = await Promise.all([
+  const vendedorId = String(req.query.vendedorId ?? "");
+  const page = Math.max(1, Number(req.query.page) || 1);
+  const pageSize = Math.min(100, Math.max(1, Number(req.query.pageSize) || 20));
+  const skip = (page - 1) * pageSize;
+  const where: any = {};
+  if (vendedorId) where.vendedorId = vendedorId;
+  const [items, movimientos, totalMovimientos] = await Promise.all([
     commercialAccountRows(year, month),
     prisma.cuentaComercialMovimiento.findMany({
-      take: 80,
+      where,
+      skip,
+      take: pageSize,
       include: { vendedor: true, usuario: { select: { nombre: true } } },
       orderBy: [{ fecha: "desc" }, { createdAt: "desc" }]
-    })
+    }),
+    prisma.cuentaComercialMovimiento.count({ where })
   ]);
-  res.json({ year, month, items, movimientos });
+  res.json({ year, month, items, movimientos, totalMovimientos, page, pageSize, totalPages: Math.ceil(totalMovimientos / pageSize) });
 });
 
 vendorsRouter.post("/cuenta/movimientos", requireRoles(Rol.ADMINISTRADOR, Rol.EMPLEADO), async (req, res) => {

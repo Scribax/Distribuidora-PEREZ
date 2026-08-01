@@ -7714,3 +7714,28 @@ aside button.theme-toggle > span:not(.theme-switch) {
     padding-block: 6px !important;
   }
 }
+
+/* ── Cuenta de vendedores: filtro + paginación + exportación ── */
+.account-movement-head {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 8px !important;
+  margin-bottom: 8px !important;
+}
+.account-movement-controls {
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  flex-wrap: wrap !important;
+}
+.compact-select {
+  padding: 4px 8px !important;
+  border-radius: 6px !important;
+  background: var(--input-bg) !important;
+  color: var(--text) !important;
+  border: 1px solid var(--border) !important;
+  font-size: 13px !important;
+  min-width: 160px !important;
+}
