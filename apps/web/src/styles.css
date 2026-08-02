@@ -7789,3 +7789,10 @@ aside button.theme-toggle > span:not(.theme-switch) {
 .error-banner-close:hover {
   background: rgba(255,255,255,0.25) !important;
 }
+
+/* ── Evitar que el botón "Crear boleta" se estire ── */
+.remito-builder .stack > button:last-child {
+  width: fit-content !important;
+  min-width: 200px !important;
+  align-self: start !important;
+}
