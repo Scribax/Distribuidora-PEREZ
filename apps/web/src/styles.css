@@ -7739,3 +7739,53 @@ aside button.theme-toggle > span:not(.theme-switch) {
   font-size: 13px !important;
   min-width: 160px !important;
 }
+
+/* ── Banner de error visible ── */
+.error-banner {
+  display: flex !important;
+  align-items: flex-start !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+  background: #b91c1c !important;
+  color: #fff !important;
+  border-radius: 10px !important;
+  padding: 14px 18px !important;
+  margin-bottom: 16px !important;
+  font-size: 15px !important;
+  line-height: 1.5 !important;
+  box-shadow: 0 4px 16px rgba(185, 28, 28, 0.35) !important;
+  animation: errorBannerIn 0.3s ease !important;
+}
+@keyframes errorBannerIn {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.error-banner-inner {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 4px !important;
+}
+.error-banner-inner strong {
+  font-size: 14px !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.5px !important;
+  opacity: 0.9 !important;
+}
+.error-banner-close {
+  background: rgba(255,255,255,0.15) !important;
+  border: none !important;
+  color: #fff !important;
+  width: 28px !important;
+  height: 28px !important;
+  border-radius: 6px !important;
+  font-size: 16px !important;
+  cursor: pointer !important;
+  flex-shrink: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 0 !important;
+}
+.error-banner-close:hover {
+  background: rgba(255,255,255,0.25) !important;
+}

@@ -156,7 +156,9 @@ export function RemittancesView({ api, canWrite, isAdmin, offlineScope }: { api:
     const formEl = event.currentTarget;
     const form = payload(formEl);
     setError("");
+    if (!form.clienteId) return setError("Tenés que elegir un cliente antes de crear la boleta.");
     if (!remitoItems.length) return setError("Agregá al menos un producto a la boleta.");
+    if (!form.fecha) return setError("La fecha de la boleta es obligatoria.");
     const body = {
       clienteId: form.clienteId,
       vendedorId: form.vendedorId || null,
@@ -203,7 +205,17 @@ export function RemittancesView({ api, canWrite, isAdmin, offlineScope }: { api:
         await enqueueOffline();
         return;
       }
-      setError(err.message ?? "No se pudo crear la boleta");
+      // Extraer el mensaje más descriptivo posible del error del backend
+      let msg = "No se pudo crear la boleta.";
+      if (err?.message) {
+        msg = err.message;
+      } else if (err?.details && Array.isArray(err.details) && err.details.length) {
+        // Zod validation errors: mostramos el primer detalle en español claro
+        const d = err.details[0];
+        const campo = d.path?.join(" → ") ?? d.field ?? "campo";
+        msg = `Error en "${campo}": ${d.message ?? "valor inválido"}`;
+      }
+      setError(msg);
       return;
     }
     // La boleta se creó en el servidor. Refrescamos la lista en un try aparte:
@@ -238,6 +250,13 @@ export function RemittancesView({ api, canWrite, isAdmin, offlineScope }: { api:
     return acc;
   }, { total: 0, paid: 0, pending: 0 });
   return <div className="remitos-layout">
+    {error && <div className="error-banner" role="alert">
+      <div className="error-banner-inner">
+        <strong>⚠️ Error</strong>
+        <span>{error}</span>
+      </div>
+      <button type="button" className="error-banner-close" onClick={() => setError("")} title="Cerrar">✕</button>
+    </div>}
     <section className="sales-board">
       <div className="sales-summary">
         <Metric label="Boletas encontradas" value={String(totalRemitos)} />
