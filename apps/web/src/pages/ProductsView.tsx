@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Search, Trash2, X } from "lucide-react";
+import { FileSpreadsheet, Search, Trash2, X } from "lucide-react";
 import type { useApi } from "../api";
 import type { Client, LineItem, Product, Supplier, User, Vendor, Dashboard } from "../types";
 import { confirmAction, dateInput, expenseLabel, formatDate, formatMovementRow, formatPurchaseRow, formatRemitoItemRow, formatRemitoRow, itemPrice, money, movementLabel, payload, qs, referenceLabel, remitoPending } from "../utils";
@@ -139,6 +139,22 @@ export function ProductsView({ api, canWrite, isAdmin }: { api: ReturnType<typeo
     setPage(safePage);
     load(q, estado, categoriaId, safePage);
   };
+  async function downloadCatalog(format: "pdf" | "xlsx") {
+    setError("");
+    try {
+      const accept = format === "pdf" ? "application/pdf" : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+      const params = { format, categoriaId: categoriaId || undefined };
+      const blob = await api(`/informes/productos?${qs(params)}`, { headers: { Accept: accept } });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `catalogo-precios.${format === "pdf" ? "pdf" : "xlsx"}`;
+      a.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
+    } catch (err: any) {
+      setError(err.message ?? "No se pudo descargar el catálogo");
+    }
+  }
   return <div className="products-page">
     <section className="products-hero">
       <div>
@@ -159,6 +175,8 @@ export function ProductsView({ api, canWrite, isAdmin }: { api: ReturnType<typeo
           <select value={estado} onChange={(e) => setEstado(e.target.value)}><option value="">Todos</option><option value="ACTIVO">Activos</option><option value="INACTIVO">Inactivos</option></select>
           <select value={categoriaId} onChange={(e) => setCategoriaId(e.target.value)}><option value="">Todas las categorías</option>{categories.map((c) => <option value={c.id} key={c.id}>{c.nombre}</option>)}</select>
           <button>Filtrar</button><button type="button" className="secondary" onClick={clearFilter}>Limpiar</button>
+          <button type="button" className="secondary" onClick={() => downloadCatalog("xlsx")} title="Descargar catálogo en Excel"><FileSpreadsheet size={16} /> Excel</button>
+          <button type="button" className="secondary" onClick={() => downloadCatalog("pdf")} title="Descargar catálogo en PDF"><FileSpreadsheet size={16} /> PDF</button>
         </form>
         <div className="products-list-toolbar">
           <span>{firstVisible}-{lastVisible} de {totalProducts} productos</span>

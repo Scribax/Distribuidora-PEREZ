@@ -244,7 +244,10 @@ reportsRouter.get("/compras", async (req, res) => {
 
 reportsRouter.get("/productos", async (req, res) => {
   const format = String(req.query.format ?? "pdf");
-  const products = await prisma.producto.findMany({ include: { categoria: true }, orderBy: { nombre: "asc" } });
+  const categoriaId = String(req.query.categoriaId ?? "");
+  const where: any = {};
+  if (categoriaId) where.categoriaId = categoriaId;
+  const products = await prisma.producto.findMany({ where, include: { categoria: true }, orderBy: { nombre: "asc" } });
   const rows = products.map((product) => ({
     codigo: product.codigoInterno,
     producto: product.nombre,

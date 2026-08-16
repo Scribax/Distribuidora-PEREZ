@@ -12,7 +12,7 @@ export function QuotesView({ api, canWrite }: { api: ReturnType<typeof useApi>; 
   const [products, setProducts] = useState<Product[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [quoteItems, setQuoteItems] = useState<LineItem[]>([]);
-  const [priceList, setPriceList] = useState<"MAYORISTA" | "MINORISTA">("MAYORISTA");
+  const [priceList, setPriceList] = useState<"MAYORISTA" | "MINORISTA">("MINORISTA");
   const [descuentoPorcentaje, setDescuentoPorcentaje] = useState(0);
   const [selectedClientId, setSelectedClientId] = useState("");
   const [clienteNombre, setClienteNombre] = useState("");

@@ -19,7 +19,7 @@ export function RemittancesView({ api, canWrite, isAdmin, offlineScope }: { api:
   const [selected, setSelected] = useState<any | null>(null);
   const [remitoItems, setRemitoItems] = useState<LineItem[]>([]);
   const [editItems, setEditItems] = useState<LineItem[]>([]);
-  const [priceList, setPriceList] = useState<"MAYORISTA" | "MINORISTA">("MAYORISTA");
+  const [priceList, setPriceList] = useState<"MAYORISTA" | "MINORISTA">("MINORISTA");
   const [descuentoPorcentaje, setDescuentoPorcentaje] = useState(0);
   const [selectedClientId, setSelectedClientId] = useState("");
   const [selectedVendorId, setSelectedVendorId] = useState("");
